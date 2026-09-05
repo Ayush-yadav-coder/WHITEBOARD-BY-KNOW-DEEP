@@ -1,0 +1,6 @@
+{
+  "name": "Whiteboard by Know Deep",
+  "description": "Classroom digital whiteboard application with interactive drawing tools, Samsung WAF style drawer, student zone splitters, smart timer widget, embedded browser, and Know Deep AI with Circle-to-Search handwritten math equation recognition and step-by-step solver.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
