@@ -36,3 +36,30 @@
   white-space: nowrap;
 }
 
+@media print {
+  body, html, #root, #know-deep-whiteboard-app {
+    background: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+    height: auto !important;
+    width: 100% !important;
+  }
+
+  /* Hide interactive toolbars, docks, menus and modals during PDF print */
+  #bottom-toolbar-container,
+  #top-left-three-line-menu-btn,
+  #knowdeep-ai-container,
+  button,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Ensure canvas takes full print area */
+  canvas {
+    max-width: 100% !important;
+    height: auto !important;
+    display: block !important;
+    page-break-inside: avoid !important;
+  }
+}
+

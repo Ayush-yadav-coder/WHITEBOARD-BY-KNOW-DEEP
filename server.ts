@@ -363,6 +363,140 @@ app.post("/api/convert-text", async (req, res) => {
   }
 });
 
+// Precision Handwritten OCR Search Endpoint
+app.post("/api/search-whiteboard-ocr", async (req, res) => {
+  try {
+    const { image, query, canvasWidth = 1920, canvasHeight = 1080 } = req.body;
+
+    if (!query || typeof query !== "string" || !query.trim()) {
+      res.status(400).json({ error: "Search query string is required." });
+      return;
+    }
+
+    if (!image || typeof image !== "string") {
+      res.status(400).json({ error: "Whiteboard canvas image is required for OCR search." });
+      return;
+    }
+
+    // Extract base64 and mime type
+    const mimeMatch = image.match(/^data:(image\/\w+);base64,/);
+    const mimeType = mimeMatch ? mimeMatch[1] : "image/png";
+    const cleanBase64 = image.replace(/^data:image\/\w+;base64,/, "").trim();
+
+    const ai = getAIClient();
+    let matches: Array<{
+      text: string;
+      box2d: [number, number, number, number]; // [ymin, xmin, ymax, xmax] 0..1000
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      confidence: number;
+      context: string;
+    }> = [];
+    let modelUsed = "local";
+
+    if (ai) {
+      const ocrSearchSystemInstruction = `You are Know Deep Whiteboard's Precision OCR & Handwriting Search Engine.
+Given an image of a digital whiteboard with handwritten text, mathematical equations, annotations, notes, and diagrams:
+1. Locate ALL occurrences of handwritten words, keywords, numbers, equations, or phrases matching or relating to the search query: "${query}" (case-insensitive substring match, exact word, or mathematical term).
+2. For each match found on the whiteboard, provide:
+   - "text": The exact text recognized on the whiteboard stroke area.
+   - "box2d": [ymin, xmin, ymax, xmax] in normalized coordinates from 0 to 1000 (where 0,0 is top-left and 1000,1000 is bottom-right of the image).
+   - "confidence": Float between 0.5 and 1.0.
+   - "context": A short 3-6 word snippet describing the line or surrounding equation.
+3. If no handwritten text or term matches the query on the board, return an empty list: {"matches": []}.
+
+You MUST respond strictly with a valid JSON object matching this schema:
+{
+  "matches": [
+    {
+      "text": "keyword or equation",
+      "box2d": [120, 250, 210, 480],
+      "confidence": 0.95,
+      "context": "Context snippet around match"
+    }
+  ]
+}`;
+
+      const candidateModels = ["gemini-3.8-flash", "gemini-3.1-flash-lite"];
+      for (const modelName of candidateModels) {
+        try {
+          const response = await ai.models.generateContent({
+            model: modelName,
+            contents: [
+              {
+                inlineData: {
+                  mimeType,
+                  data: cleanBase64,
+                },
+              },
+              {
+                text: `Find and locate all handwritten text matching "${query}" on this whiteboard image. Return their 2D bounding boxes in [ymin, xmin, ymax, xmax] normalized 0..1000 format.`,
+              },
+            ],
+            config: {
+              systemInstruction: ocrSearchSystemInstruction,
+              responseMimeType: "application/json",
+              temperature: 0.1,
+            },
+          });
+
+          if (response && response.text) {
+            const rawJson = response.text.trim();
+            let parsed;
+            try {
+              parsed = JSON.parse(rawJson);
+            } catch {
+              const match = rawJson.match(/\{[\s\S]*\}/);
+              if (match) parsed = JSON.parse(match[0]);
+            }
+
+            if (parsed && Array.isArray(parsed.matches)) {
+              matches = parsed.matches.map((m: any) => {
+                const box2d = Array.isArray(m.box2d) && m.box2d.length === 4
+                  ? m.box2d
+                  : [100, 100, 200, 300];
+                const [ymin, xmin, ymax, xmax] = box2d;
+                const x = (xmin / 1000) * canvasWidth;
+                const y = (ymin / 1000) * canvasHeight;
+                const width = Math.max(40, ((xmax - xmin) / 1000) * canvasWidth);
+                const height = Math.max(30, ((ymax - ymin) / 1000) * canvasHeight);
+
+                return {
+                  text: String(m.text || query),
+                  box2d: [ymin, xmin, ymax, xmax] as [number, number, number, number],
+                  x,
+                  y,
+                  width,
+                  height,
+                  confidence: typeof m.confidence === "number" ? m.confidence : 0.9,
+                  context: String(m.context || m.text || query),
+                };
+              });
+              modelUsed = modelName;
+              break;
+            }
+          }
+        } catch (searchErr) {
+          console.warn(`OCR Search with ${modelName} warning:`, searchErr);
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      query,
+      matches,
+      model: modelUsed,
+    });
+  } catch (err: unknown) {
+    console.error("OCR Search error:", err);
+    const errorMessage = err instanceof Error ? err.message : "Error performing OCR search";
+    res.status(500).json({ error: errorMessage });
+  }
+});
+
 // Vite middleware in dev or static serving in production
 async function start() {
   if (process.env.NODE_ENV !== "production") {

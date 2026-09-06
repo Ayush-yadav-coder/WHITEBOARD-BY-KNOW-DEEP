@@ -2,6 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Move,
   PenTool,
+  Pencil,
+  Paintbrush,
+  Feather,
   Eraser,
   Shapes,
   Plus,
@@ -32,9 +35,11 @@ import {
   Layers,
   Hand,
   Navigation,
-  BrainCircuit,
+  LayoutGrid,
   BoxSelect,
   Box,
+  HelpCircle,
+  Presentation,
 } from 'lucide-react';
 import {
   ToolType,
@@ -71,7 +76,7 @@ interface BottomToolbarProps {
   onChangePenWidth: (width: number) => void;
   onChangeEraserSize: (size: number) => void;
   onToggleDualPen: () => void;
-  onSelectPenMode: (mode: 'pen' | 'shape-pen' | 'text-pen' | 'highlighter') => void;
+  onSelectPenMode: (mode: 'pen' | 'pencil' | 'calligraphy' | 'shape-pen' | 'text-pen' | 'highlighter') => void;
   onClearCanvas: () => void;
   onToggleRuler: () => void;
   onToggleProtractor: () => void;
@@ -79,6 +84,8 @@ interface BottomToolbarProps {
   onToggleCurtain: () => void;
   onOpenPeriodicTable: () => void;
   onOpenClassroomPicker: () => void;
+  onOpenQuizGenerator?: () => void;
+  onOpenPPTUploader?: () => void;
   onAddStickyNote: () => void;
   onSlidePageLeft: () => void;
   onToggleBrowser: () => void;
@@ -96,6 +103,15 @@ const QUICK_COLORS = [
   { name: 'Green', hex: '#10b981', bgClass: 'bg-emerald-500 border-emerald-600' },
   { name: 'Yellow', hex: '#eab308', bgClass: 'bg-amber-400 border-amber-500' },
   { name: 'White', hex: '#ffffff', bgClass: 'bg-white border-slate-300' },
+];
+
+const HIGHLIGHTER_COLORS = [
+  { name: 'Yellow Light', hex: '#fef08a', bgClass: 'bg-yellow-200 border-yellow-300' },
+  { name: 'Green Light', hex: '#bbf7d0', bgClass: 'bg-green-200 border-green-300' },
+  { name: 'Blue Light', hex: '#bfdbfe', bgClass: 'bg-blue-200 border-blue-300' },
+  { name: 'Pink Light', hex: '#fbcfe8', bgClass: 'bg-pink-200 border-pink-300' },
+  { name: 'Orange Light', hex: '#fed7aa', bgClass: 'bg-orange-200 border-orange-300' },
+  { name: 'Purple Light', hex: '#e9d5ff', bgClass: 'bg-purple-200 border-purple-300' },
 ];
 
 const STROKE_WIDTHS = [
@@ -140,6 +156,8 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
   onToggleCurtain,
   onOpenPeriodicTable,
   onOpenClassroomPicker,
+  onOpenQuizGenerator,
+  onOpenPPTUploader,
   onAddStickyNote,
   onSlidePageLeft,
   onToggleBrowser,
@@ -153,6 +171,7 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
   const [showEraserMenu, setShowEraserMenu] = useState(false);
   const [showGeometryMenu, setShowGeometryMenu] = useState(false);
   const [showTeachingToolsMenu, setShowTeachingToolsMenu] = useState(false);
+  const [swipeClearValue, setSwipeClearValue] = useState(0);
 
   const toolbarRef = useRef<HTMLDivElement>(null);
 
@@ -221,7 +240,7 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
               Active Color ({dualPen.activePen === 'penA' ? 'Pen A' : 'Pen B'})
             </span>
             <div className="flex items-center justify-between">
-              {QUICK_COLORS.map((c) => (
+              {(activeTool === 'highlighter' ? HIGHLIGHTER_COLORS : QUICK_COLORS).map((c) => (
                 <button
                   key={c.name}
                   type="button"
@@ -240,13 +259,31 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
           {/* Pen Sub-Modes / Wacom Modes */}
           <div>
             <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">
-              Tools & AI Refinement
+              Pen Styles & AI Tools
             </span>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => {
                   onSelectPenMode('pen');
+                  onSelectTool('pen');
+                  onChangePenWidth(6);
+                }}
+                className={`p-2 rounded-xl border flex items-center space-x-2 transition-all ${
+                  activeTool === 'pen'
+                    ? 'bg-sky-500 text-white border-sky-500 font-bold shadow-sm'
+                    : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+                }`}
+                title="Pen: Smooth digital ink writing"
+              >
+                <PenTool className="w-4 h-4 text-sky-400" />
+                <span className="text-[11px]">Smooth Pen</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  onSelectPenMode('calligraphy');
                   onSelectTool('calligraphy');
                   onChangePenWidth(8);
                 }}
@@ -255,10 +292,46 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
                     ? 'bg-sky-500 text-white border-sky-500 font-bold shadow-sm'
                     : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
                 }`}
-                title="Calligraphy: Velocity and pressure based stroke thickness variation"
+                title="Calligraphy Brush: Pressure-sensitive stroke width & artistic taper"
               >
-                <PenTool className="w-4 h-4 text-orange-400" />
-                <span className="text-[11px]">Calligraphy</span>
+                <Paintbrush className="w-4 h-4 text-orange-400" />
+                <span className="text-[11px]">Calligraphy Brush</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  onSelectPenMode('pencil');
+                  onSelectTool('pencil');
+                  onChangePenWidth(3);
+                }}
+                className={`p-2 rounded-xl border flex items-center space-x-2 transition-all ${
+                  activeTool === 'pencil'
+                    ? 'bg-sky-500 text-white border-sky-500 font-bold shadow-sm'
+                    : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+                }`}
+                title="Pencil: Fine drafting, preserves stroke fidelity exactly"
+              >
+                <Pencil className="w-4 h-4 text-slate-400" />
+                <span className="text-[11px]">Pencil</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  onSelectPenMode('highlighter');
+                  onSelectTool('highlighter');
+                  onChangePenWidth(18);
+                }}
+                className={`p-2 rounded-xl border flex items-center space-x-2 transition-all ${
+                  activeTool === 'highlighter'
+                    ? 'bg-sky-500 text-white border-sky-500 font-bold shadow-sm'
+                    : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+                }`}
+                title="Highlighter: Semi-transparent marker"
+              >
+                <Highlighter className="w-4 h-4 text-yellow-400" />
+                <span className="text-[11px]">Highlighter</span>
               </button>
 
               <button
@@ -293,23 +366,6 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
               >
                 <Type className="w-4 h-4 text-emerald-400" />
                 <span className="text-[11px]">Text Pen (AI)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  onSelectPenMode('highlighter');
-                  onSelectTool('highlighter');
-                }}
-                className={`p-2 rounded-xl border flex items-center space-x-2 transition-all ${
-                  activeTool === 'highlighter'
-                    ? 'bg-sky-500 text-white border-sky-500 font-bold shadow-sm'
-                    : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
-                }`}
-                title="Highlighter: Semi-transparent marker"
-              >
-                <Highlighter className="w-4 h-4 text-yellow-400" />
-                <span className="text-[11px]">Highlighter</span>
               </button>
             </div>
           </div>
@@ -349,29 +405,37 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
             {/* Swipe to Clear Slider (Right) */}
             <div className="relative p-3 rounded-2xl border bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center group overflow-hidden">
               <div className="absolute inset-0 bg-rose-500/0 group-hover:bg-rose-500/5 transition-colors pointer-events-none" />
-              <div className="relative w-full h-8 bg-slate-200 dark:bg-slate-700 rounded-full flex items-center p-1 cursor-pointer">
+              <div className="relative w-full h-8 bg-slate-200 dark:bg-slate-700 rounded-full flex items-center p-1 cursor-pointer overflow-hidden">
                 <input
                   type="range"
                   min="0"
                   max="100"
-                  defaultValue="0"
+                  value={swipeClearValue}
                   onChange={(e) => {
-                    if (e.target.value === '100') {
-                      if (window.confirm('Clear entire page?')) {
-                        onClearCanvas();
-                      }
-                      e.target.value = '0';
+                    const val = parseInt(e.target.value, 10);
+                    setSwipeClearValue(val);
+                  }}
+                  onMouseUp={(e) => {
+                    if (swipeClearValue > 80) {
+                      onClearCanvas();
                     }
+                    setSwipeClearValue(0);
+                  }}
+                  onTouchEnd={(e) => {
+                    if (swipeClearValue > 80) {
+                      onClearCanvas();
+                    }
+                    setSwipeClearValue(0);
                   }}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                 />
                 <div 
-                  className="w-6 h-6 bg-white dark:bg-slate-200 rounded-full shadow-md flex items-center justify-center text-rose-500 pointer-events-none"
-                  style={{ marginLeft: '0%' }}
+                  className="absolute left-1 w-6 h-6 bg-white dark:bg-slate-200 rounded-full shadow-md flex items-center justify-center text-rose-500 pointer-events-none transition-none"
+                  style={{ transform: `translateX(${(swipeClearValue / 100) * 80}px)` }}
                 >
                   <Eraser className="w-3.5 h-3.5" />
                 </div>
-                <span className="ml-8 text-[9px] font-black text-slate-400 dark:text-slate-500 pointer-events-none uppercase tracking-tighter">Swipe to Clear</span>
+                <span className="w-full text-center text-[9px] font-black text-slate-400 dark:text-slate-500 pointer-events-none uppercase tracking-tighter" style={{ opacity: Math.max(0, 1 - swipeClearValue / 50) }}>Swipe</span>
               </div>
               <span className="text-[10px] mt-1.5 uppercase font-black text-slate-500 dark:text-slate-400">Clear Page</span>
             </div>
@@ -421,6 +485,9 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
               { id: 'pentagon' as ShapeType, label: 'Pent', icon: Shapes },
               { id: 'heart' as ShapeType, label: 'Heart', icon: Star },
               { id: 'diamond' as ShapeType, label: 'Diam', icon: Square },
+              { id: 'flow-process' as ShapeType, label: 'Flow', icon: Square },
+              { id: 'flow-decision' as ShapeType, label: 'Dec', icon: Square },
+              { id: 'venn' as ShapeType, label: 'Venn', icon: Circle },
             ].map((shape) => {
               const Icon = shape.icon;
               return (
@@ -621,6 +688,69 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
                 <span className="text-[9px] opacity-75">Post-it memo</span>
               </div>
             </button>
+
+            {/* Quiz Generator */}
+            <button
+              id="toolbar-quiz-generator-btn"
+              type="button"
+              onClick={() => {
+                if (onOpenQuizGenerator) onOpenQuizGenerator();
+                setShowTeachingToolsMenu(false);
+              }}
+              className="p-2.5 rounded-xl border text-left flex flex-col items-start space-y-1 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/30 hover:border-emerald-400 border-emerald-300/80 dark:border-emerald-700/60 transition-all"
+            >
+              <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-500">
+                <HelpCircle className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="text-xs font-bold block text-emerald-700 dark:text-emerald-300">
+                  Quiz Generator
+                </span>
+                <span className="text-[9px] opacity-75">Create test from board</span>
+              </div>
+            </button>
+
+            {/* Dice & Random Student Picker */}
+            <button
+              id="toolbar-classroom-picker-btn"
+              type="button"
+              onClick={() => {
+                onOpenClassroomPicker();
+                setShowTeachingToolsMenu(false);
+              }}
+              className="p-2.5 rounded-xl border text-left flex flex-col items-start space-y-1 bg-slate-50 dark:bg-slate-800/70 hover:bg-slate-100 border-slate-200 dark:border-slate-700 transition-all"
+            >
+              <div className="p-1.5 rounded-lg bg-amber-400/20 text-amber-500">
+                <Dices className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="text-xs font-bold block">Dice &amp; Picker</span>
+                <span className="text-[9px] opacity-75">Roll dice &amp; select</span>
+              </div>
+            </button>
+
+            {/* PPT & Presentation Uploader */}
+            <button
+              id="toolbar-ppt-uploader-btn"
+              type="button"
+              onClick={() => {
+                if (onOpenPPTUploader) onOpenPPTUploader();
+                setShowTeachingToolsMenu(false);
+              }}
+              className="p-2.5 rounded-xl border text-left flex flex-col items-start space-y-1 bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/40 dark:to-amber-950/30 hover:border-orange-400 border-orange-300/80 dark:border-orange-700/60 transition-all sm:col-span-2"
+            >
+              <div className="flex items-center space-x-2">
+                <div className="p-1.5 rounded-lg bg-orange-500/20 text-orange-500">
+                  <Presentation className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold block text-orange-700 dark:text-orange-300">
+                    Presentation &amp; PPT Uploader
+                  </span>
+                  <span className="text-[9px] opacity-75">Upload slides &amp; present on whiteboard</span>
+                </div>
+              </div>
+            </button>
           </div>
         </div>
       )}
@@ -657,6 +787,7 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
             onClick={() => {
               if (
                 activeTool === 'pen' ||
+                activeTool === 'pencil' ||
                 activeTool === 'calligraphy' ||
                 activeTool === 'shape-pen' ||
                 activeTool === 'text-pen' ||
@@ -673,6 +804,7 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
             }}
             className={`p-1.5 sm:p-2 rounded-xl flex items-center space-x-1 sm:space-x-1.5 transition-all ${
               activeTool === 'pen' ||
+              activeTool === 'pencil' ||
               activeTool === 'calligraphy' ||
               activeTool === 'shape-pen' ||
               activeTool === 'text-pen' ||
@@ -688,6 +820,10 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
               <Type className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-300" />
             ) : activeTool === 'highlighter' ? (
               <Highlighter className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-300" />
+            ) : activeTool === 'calligraphy' ? (
+              <Paintbrush className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300" />
+            ) : activeTool === 'pencil' ? (
+              <Pencil className="w-4 h-4 sm:w-5 sm:h-5" />
             ) : (
               <PenTool className="w-4 h-4 sm:w-5 sm:h-5" />
             )}
@@ -743,7 +879,7 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
               ? 'bg-sky-500 text-white shadow-md scale-105'
               : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200'
           }`}
-          title="Selection & Drag Tool (Encircle area with custom lines to select, move, and rotate shapes)"
+          title="Navigation & Selection Tool (Encircle items to select. Use the corner handle to resize/crop images or shapes)"
         >
           <Navigation className="w-4 h-4 sm:w-5 sm:h-5 rotate-45 text-cyan-500 dark:text-cyan-400" />
         </button>
@@ -787,9 +923,9 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
                 ? 'bg-cyan-600 text-white shadow-md scale-105'
                 : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200'
             }`}
-            title="More Gemini Interactive Classroom Features"
+            title="More Interactive Classroom Features"
           >
-            <BrainCircuit className="w-4 h-4 sm:w-5 sm:h-5 text-purple-500 animate-pulse" />
+            <LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5 text-purple-500 animate-pulse" />
             <ChevronUp className="w-2.5 h-2.5 sm:w-3 sm:h-3 opacity-60" />
           </button>
         </div>

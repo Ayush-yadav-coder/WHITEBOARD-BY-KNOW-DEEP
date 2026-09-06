@@ -37,6 +37,8 @@ interface WhiteboardCanvasProps {
   settings: WhiteboardSettings;
   splitZones: SplitZoneCount;
   pageSlideOffset: number;
+  searchHighlight?: { x: number; y: number; width: number; height: number; text: string; source?: string } | null;
+  cameraFocusTarget?: { x: number; y: number; width?: number; height?: number; id?: string } | null;
   onAddStroke: (stroke: Stroke) => void;
   onAddShape: (shape: ShapeElement) => void;
   onUpdateNote: (noteId: string, updates: Partial<CanvasNote>) => void;
@@ -73,6 +75,8 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
   settings,
   splitZones,
   pageSlideOffset,
+  searchHighlight,
+  cameraFocusTarget,
   onAddStroke,
   onAddShape,
   onUpdateNote,
@@ -89,6 +93,49 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Smooth Camera/Viewport Panning to Focus Target (e.g. OCR match)
+  useEffect(() => {
+    if (!cameraFocusTarget) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const screenWidth = canvas.width / dpr;
+    const screenHeight = canvas.height / dpr;
+
+    const targetCenterX = cameraFocusTarget.x + (cameraFocusTarget.width || 80) / 2;
+    const targetCenterY = cameraFocusTarget.y + (cameraFocusTarget.height || 60) / 2;
+
+    const targetPanX = screenWidth / 2 - targetCenterX - pageSlideOffset;
+    const targetPanY = screenHeight / 2 - targetCenterY;
+
+    // Smoothly animate panOffset to target
+    const startX = panOffset.x;
+    const startY = panOffset.y;
+    const startTime = performance.now();
+    const duration = 450; // ms
+
+    let animationFrameId: number;
+
+    const animatePan = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(1, elapsed / duration);
+      // Ease out cubic
+      const ease = 1 - Math.pow(1 - progress, 3);
+
+      const nextX = startX + (targetPanX - startX) * ease;
+      const nextY = startY + (targetPanY - startY) * ease;
+
+      setPanOffset({ x: nextX, y: nextY });
+
+      if (progress < 1) {
+        animationFrameId = requestAnimationFrame(animatePan);
+      }
+    };
+
+    animationFrameId = requestAnimationFrame(animatePan);
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [cameraFocusTarget, pageSlideOffset]);
 
   // Rotation dragging state
   const isRotatingSelectionRef = useRef(false);
@@ -111,7 +158,7 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
   // Multi-touch active pointer storage (up to 20 touch points)
   const activePointersRef = useRef<Map<number, Point[]>>(new Map());
   const smoothedPointersRef = useRef<Map<number, Point>>(new Map());
-  const SMOOTHING_FACTOR = 0.25; // Lower is smoother but has more latency
+  const SMOOTHING_FACTOR = 0.65; // Highly responsive & fluid handwriting smoothing
 
   // Current interactive shape preview on drag
   const [activeShapePreview, setActiveShapePreview] = useState<{
@@ -214,10 +261,31 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
       const isPalmEraser = palmPointerIdsRef.current.has(pointerId);
       const isEraser = activeTool === 'eraser' || isPalmEraser;
       const isHighlighter = activeTool === 'highlighter' && !isPalmEraser;
+
+      let liveColor = penColor;
+      if (!isEraser && splitZones > 1 && settings.studentMode && pts.length > 0) {
+        const startX = pts[0].x + totalOffsetX;
+        const zoneWidth = width / splitZones;
+        const zoneIdx = Math.max(0, Math.min(splitZones - 1, Math.floor(startX / zoneWidth)));
+        const studentPenColors = ['#2563eb', '#059669', '#d97706', '#db2777'];
+        liveColor = studentPenColors[zoneIdx % 4];
+      }
+
+      const isCalligraphy = activeTool === 'calligraphy' && !isPalmEraser;
+      const isPencil = activeTool === 'pencil' && !isPalmEraser;
+
       const stroke: Stroke = {
         id: 'active',
-        tool: isEraser ? 'eraser' : isHighlighter ? 'highlighter' : 'pen',
-        color: isEraser ? '#ffffff' : penColor,
+        tool: isEraser
+          ? 'eraser'
+          : isHighlighter
+          ? 'highlighter'
+          : isCalligraphy
+          ? 'calligraphy'
+          : isPencil
+          ? 'pencil'
+          : 'pen',
+        color: isEraser ? '#ffffff' : liveColor,
         width: isEraser ? (isPalmEraser ? Math.max(eraserSize, 80) : eraserSize) : penWidth,
         points: pts,
         opacity: isHighlighter ? 0.35 : 1,
@@ -345,11 +413,88 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
       ctx.restore();
     }
 
+    // 8. Draw OCR / Keyword Search Highlight Focus Box
+    if (searchHighlight) {
+      ctx.save();
+      const pad = 12;
+      const hx = searchHighlight.x - pad;
+      const hy = searchHighlight.y - pad;
+      const hw = Math.max(80, (searchHighlight.width || 120) + pad * 2);
+      const hh = Math.max(40, (searchHighlight.height || 60) + pad * 2);
+
+      // Glowing spotlight aura
+      ctx.fillStyle = 'rgba(6, 182, 212, 0.18)';
+      ctx.fillRect(hx, hy, hw, hh);
+
+      // Radiant dashed cyan outline
+      ctx.strokeStyle = '#06b6d4';
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([6, 4]);
+      ctx.strokeRect(hx, hy, hw, hh);
+
+      // Sleek Corner Focus Brackets
+      ctx.setLineDash([]);
+      ctx.strokeStyle = '#22d3ee';
+      ctx.lineWidth = 3.5;
+      const bracketLen = 14;
+
+      // Top-left
+      ctx.beginPath();
+      ctx.moveTo(hx, hy + bracketLen);
+      ctx.lineTo(hx, hy);
+      ctx.lineTo(hx + bracketLen, hy);
+      ctx.stroke();
+
+      // Top-right
+      ctx.beginPath();
+      ctx.moveTo(hx + hw - bracketLen, hy);
+      ctx.lineTo(hx + hw, hy);
+      ctx.lineTo(hx + hw, hy + bracketLen);
+      ctx.stroke();
+
+      // Bottom-left
+      ctx.beginPath();
+      ctx.moveTo(hx, hy + hh - bracketLen);
+      ctx.lineTo(hx, hy + hh);
+      ctx.lineTo(hx + bracketLen, hy + hh);
+      ctx.stroke();
+
+      // Bottom-right
+      ctx.beginPath();
+      ctx.moveTo(hx + hw - bracketLen, hy + hh);
+      ctx.lineTo(hx + hw, hy + hh);
+      ctx.lineTo(hx + hw, hy + hh - bracketLen);
+      ctx.stroke();
+
+      // Floating Badge above the highlight box
+      const badgeText = `OCR Match: ${searchHighlight.text}`;
+      ctx.font = 'bold 11px system-ui, sans-serif';
+      const textWidth = ctx.measureText(badgeText).width;
+      const badgeH = 22;
+      const badgeW = textWidth + 16;
+      const badgeX = hx;
+      const badgeY = Math.max(10, hy - 26);
+
+      ctx.fillStyle = '#0891b2';
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 6);
+      } else {
+        ctx.rect(badgeX, badgeY, badgeW, badgeH);
+      }
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(badgeText, badgeX + 8, badgeY + 15);
+
+      ctx.restore();
+    }
+
     ctx.restore();
 
-    // 8. Draw Split Zone Boundaries (When Split Screen is Active)
+    // 9. Draw Split Zone Boundaries (When Split Screen is Active)
     if (splitZones > 1) {
-      drawSplitZoneDividers(ctx, width, height, splitZones);
+      drawSplitZoneDividers(ctx, width, height, splitZones, !!settings.studentMode);
     }
 
     ctx.restore();
@@ -365,6 +510,7 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
     splitZones,
     panOffset,
     pageSlideOffset,
+    searchHighlight,
     activeShapePreview,
     lassoPoints,
     selectedStrokeIds,
@@ -374,6 +520,14 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
 
   useEffect(() => {
     renderCanvas();
+  }, [renderCanvas]);
+
+  useEffect(() => {
+    const handleImageLoaded = () => {
+      renderCanvas();
+    };
+    window.addEventListener('whiteboard-image-loaded', handleImageLoaded);
+    return () => window.removeEventListener('whiteboard-image-loaded', handleImageLoaded);
   }, [renderCanvas]);
 
   // Pointer Event Handlers
@@ -582,12 +736,25 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
       const shapeId = selectedShapeIds[0];
       const shape = shapes.find(s => s.id === shapeId);
       if (shape && onResizeSelected) {
-        const dx = clickX - dragSelectionStartRef.current.x;
-        const dy = clickY - dragSelectionStartRef.current.y;
-        const newWidth = Math.max(20, shape.width + dx);
-        const newHeight = Math.max(20, shape.height + dy);
-        onResizeSelected(shapeId, newWidth, newHeight);
-        dragSelectionStartRef.current = { x: clickX, y: clickY };
+        let dx = clickX - dragSelectionStartRef.current.x;
+        let dy = clickY - dragSelectionStartRef.current.y;
+        
+        if (settings.snapToGrid) {
+          const g = settings.gridSize || 20;
+          dx = Math.round(dx / g) * g;
+          dy = Math.round(dy / g) * g;
+        }
+
+        if (dx !== 0 || dy !== 0) {
+          const newWidth = Math.max(20, shape.width + dx);
+          const newHeight = Math.max(20, shape.height + dy);
+          onResizeSelected(shapeId, newWidth, newHeight);
+          // Only update start ref if we actually moved the grid step
+          dragSelectionStartRef.current = { 
+            x: dragSelectionStartRef.current.x + dx, 
+            y: dragSelectionStartRef.current.y + dy 
+          };
+        }
       }
       renderCanvas();
       return;
@@ -597,8 +764,15 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
     if (isDraggingSelectionRef.current) {
       const clickX = x - (panOffset.x + pageSlideOffset);
       const clickY = y - panOffset.y;
-      const dx = clickX - dragSelectionStartRef.current.x;
-      const dy = clickY - dragSelectionStartRef.current.y;
+      let dx = clickX - dragSelectionStartRef.current.x;
+      let dy = clickY - dragSelectionStartRef.current.y;
+      
+      if (settings.snapToGrid) {
+        const g = settings.gridSize || 20;
+        dx = Math.round(dx / g) * g;
+        dy = Math.round(dy / g) * g;
+      }
+      
       dragSelectionOffsetRef.current = { x: dx, y: dy };
       renderCanvas();
       return;
@@ -620,7 +794,13 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
       const rawX = x - currentOffsetX;
       const rawY = y - currentOffsetY;
 
-      // Exponential Moving Average for Stroke Stabilization
+      // Distance threshold check to reject zero/sub-pixel micro-jitter
+      const distSq = (rawX - lastSmoothed.x) ** 2 + (rawY - lastSmoothed.y) ** 2;
+      if (distSq < 1.0) {
+        return;
+      }
+
+      // Responsive quadratic moving filter for instant natural stroke tracking
       const smoothedX = lastSmoothed.x + (rawX - lastSmoothed.x) * SMOOTHING_FACTOR;
       const smoothedY = lastSmoothed.y + (rawY - lastSmoothed.y) * SMOOTHING_FACTOR;
 
@@ -632,6 +812,22 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
 
       pts.push(smoothedPoint);
       smoothedPointersRef.current.set(e.pointerId, smoothedPoint);
+
+      if (activeTool === 'eraser' || palmPointerIdsRef.current.has(e.pointerId)) {
+        const collidedShapes = shapes.filter(sh => {
+          const r = eraserSize / 2;
+          return (
+            rawX + r >= sh.x &&
+            rawX - r <= sh.x + sh.width &&
+            rawY + r >= sh.y &&
+            rawY - r <= sh.y + sh.height
+          );
+        });
+        if (collidedShapes.length > 0 && onDeleteSelected) {
+          onDeleteSelected([], collidedShapes.map(s => s.id));
+        }
+      }
+
       renderCanvas();
     }
   };
@@ -870,10 +1066,21 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
         const isEraser = activeTool === 'eraser' || isPalmEraser;
         const isHighlighter = activeTool === 'highlighter' && !isPalmEraser;
         const isCalligraphy = activeTool === 'calligraphy' && !isPalmEraser;
+
+        let finalStrokeColor = penColor;
+        if (!isEraser && splitZones > 1 && settings.studentMode && pts.length > 0) {
+          const startX = pts[0].x + currentOffsetX;
+          const canvasWidth = canvasRef.current?.width || window.innerWidth;
+          const zoneWidth = canvasWidth / splitZones;
+          const zoneIdx = Math.max(0, Math.min(splitZones - 1, Math.floor(startX / zoneWidth)));
+          const studentPenColors = ['#2563eb', '#059669', '#d97706', '#db2777'];
+          finalStrokeColor = studentPenColors[zoneIdx % 4];
+        }
+
         const stroke: Stroke = {
           id: `stroke-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
           tool: isEraser ? 'eraser' : isHighlighter ? 'highlighter' : isCalligraphy ? 'calligraphy' : 'pen',
-          color: isEraser ? '#ffffff' : penColor,
+          color: isEraser ? '#ffffff' : finalStrokeColor,
           width: isEraser ? (isPalmEraser ? Math.max(eraserSize, 80) : eraserSize) : penWidth,
           points: pts,
           opacity: isHighlighter ? 0.35 : 1,
@@ -899,8 +1106,15 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
 
   const handleNotePointerMove = (e: React.PointerEvent) => {
     if (!draggingNoteId) return;
-    const newX = e.clientX - noteDragOffsetRef.current.x;
-    const newY = e.clientY - noteDragOffsetRef.current.y;
+    let newX = e.clientX - noteDragOffsetRef.current.x;
+    let newY = e.clientY - noteDragOffsetRef.current.y;
+    
+    if (settings.snapToGrid) {
+      const g = settings.gridSize || 20;
+      newX = Math.round(newX / g) * g;
+      newY = Math.round(newY / g) * g;
+    }
+    
     onUpdateNote(draggingNoteId, { x: newX, y: newY });
   };
 
@@ -1177,27 +1391,40 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
       {/* STUDENT ZONE HEADER BADGES (When Split Screen is Active: 2, 3, or 4 Zones) */}
       {splitZones > 1 && (
         <div className="absolute top-4 left-0 right-0 z-20 pointer-events-none flex justify-around px-8">
-          {Array.from({ length: splitZones }).map((_, idx) => (
-            <div
-              key={`zone-badge-${idx}`}
-              className="pointer-events-auto bg-white/95 dark:bg-slate-900/95 border border-sky-300/60 dark:border-sky-900/60 rounded-full px-2.5 py-1 shadow-md flex items-center space-x-1.5 text-xs backdrop-blur-md"
-            >
+          {Array.from({ length: splitZones }).map((_, idx) => {
+            const studentColors = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899'];
+            const studentColor = studentColors[idx % 4];
+            const studentName = `Student ${idx + 1}`;
+            return (
               <div
-                className="w-2.5 h-2.5 rounded-full"
-                style={{
-                  backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ec4899'][idx % 4],
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => onClearZone(idx)}
-                className="p-0.5 text-slate-400 hover:text-rose-500 rounded transition-colors flex items-center justify-center"
-                title={`Clear Zone ${idx + 1}`}
+                key={`zone-badge-${idx}`}
+                className="pointer-events-auto bg-white/95 dark:bg-slate-900/95 border-2 rounded-2xl px-3 py-1 shadow-lg flex items-center space-x-2 text-xs backdrop-blur-md transition-all hover:scale-105"
+                style={{ borderColor: studentColor }}
               >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ))}
+                <div
+                  className="w-3 h-3 rounded-full shadow-sm animate-pulse"
+                  style={{ backgroundColor: studentColor }}
+                />
+                <span className="font-bold text-slate-800 dark:text-white">
+                  🎓 {studentName}
+                </span>
+                <span
+                  className="text-[10px] font-bold px-1.5 py-0.5 rounded text-white shadow-sm"
+                  style={{ backgroundColor: studentColor }}
+                >
+                  Active
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onClearZone(idx)}
+                  className="p-1 text-slate-400 hover:text-rose-500 rounded transition-colors flex items-center justify-center ml-1"
+                  title={`Clear ${studentName}'s Zone`}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -1208,7 +1435,7 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
           <div
             key={note.id}
             id={`canvas-note-${note.id}`}
-            className={`absolute z-20 pointer-events-auto w-72 sm:w-80 rounded-2xl shadow-xl backdrop-blur-md overflow-hidden border-2 transition-shadow ${theme.bg} ${theme.border}`}
+            className={`absolute z-20 pointer-events-auto w-72 sm:w-80 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden transition-shadow`}
             style={{
               left: `${note.x + panOffset.x + pageSlideOffset}px`,
               top: `${note.y + panOffset.y}px`,
@@ -1216,36 +1443,29 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
           >
             {/* Note Drag Header */}
             <div
-              className={`flex items-center justify-between px-3 py-2 cursor-grab active:cursor-grabbing text-xs select-none ${theme.header}`}
+              className={`flex items-center justify-between px-3 py-2 cursor-grab active:cursor-grabbing text-xs select-none border-t-4 bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800`}
+              style={{ borderTopColor: STICKY_COLORS[note.color || 'yellow']?.bg || '#fef08a' }}
               onPointerDown={(e) => handleNotePointerDown(e, note)}
               onPointerMove={handleNotePointerMove}
               onPointerUp={handleNotePointerUp}
             >
-              <div className="flex items-center space-x-1.5 font-bold truncate">
-                <Pin className="w-3.5 h-3.5 fill-current" />
-                <span className="truncate">{note.title || 'Sticky Note'}</span>
+              <div className="flex items-center space-x-1.5 font-semibold text-slate-700 dark:text-slate-300 w-full truncate">
+                <Pin className="w-3.5 h-3.5 shrink-0" />
+                <input 
+                  type="text" 
+                  value={note.title || ''} 
+                  onChange={(e) => onUpdateNote(note.id, { title: e.target.value })}
+                  placeholder="Note Title" 
+                  className="bg-transparent border-none outline-none text-slate-700 dark:text-slate-300 placeholder-slate-400 w-full" 
+                  onClick={(e) => e.stopPropagation()} 
+                />
               </div>
-              <div className="flex items-center space-x-1" onClick={(e) => e.stopPropagation()}>
-                {/* Ask AI to Expand note */}
-                {onCircleToSearchAI && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onCircleToSearchAI(
-                        `Please explain and expand upon this whiteboard lesson note: "${note.text}"`
-                      )
-                    }
-                    className="p-1 hover:bg-black/15 rounded text-slate-900"
-                    title="Explain or expand note with Know Deep AI"
-                  >
-                    <Sparkles className="w-3 h-3" />
-                  </button>
-                )}
+              <div className="flex items-center space-x-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                 {/* Delete */}
                 <button
                   type="button"
                   onClick={() => onDeleteNote(note.id)}
-                  className="p-1 hover:bg-black/15 rounded text-slate-900 transition-colors"
+                  className="p-1 hover:bg-rose-500/10 hover:text-rose-500 rounded text-slate-400 transition-colors"
                   title="Remove Note"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -1254,81 +1474,65 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
             </div>
 
             {/* Note Body: Editable Textarea */}
-            <div className="p-3">
+            <div className="p-3 bg-white dark:bg-slate-800">
               <textarea
                 value={note.text}
                 onChange={(e) => onUpdateNote(note.id, { text: e.target.value })}
                 placeholder="Type lesson thoughts or student responses here..."
                 rows={4}
                 style={{
-                  fontSize: note.fontSize ? `${note.fontSize}px` : '12px',
+                  fontSize: note.fontSize ? `${note.fontSize}px` : '14px',
                 }}
-                className={`w-full bg-transparent resize-none border-none outline-none leading-relaxed ${
+                className={`w-full bg-transparent resize-none border-none outline-none leading-relaxed text-slate-800 dark:text-slate-200 ${
                   note.fontFamily === 'serif'
                     ? 'font-serif'
                     : note.fontFamily === 'mono'
                     ? 'font-mono'
                     : 'font-sans'
-                } ${theme.text}`}
+                }`}
               />
             </div>
 
-            {/* Note Formatting Toolbar */}
-            <div className="px-3 pb-2.5 pt-1.5 bg-black/5 dark:bg-white/5 border-t border-black/10 dark:border-white/10 flex items-center justify-between flex-wrap gap-2 pointer-events-auto" onClick={(e) => e.stopPropagation()}>
-              {/* Font Size Selector */}
-              <div className="flex items-center space-x-1">
-                {[12, 24, 36].map((sz) => (
-                  <button
-                    key={`sz-${sz}`}
-                    type="button"
-                    onClick={() => onUpdateNote(note.id, { fontSize: sz as 12 | 24 | 36 })}
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors ${
-                      (note.fontSize || 12) === sz
-                        ? 'bg-sky-500 text-white font-bold'
-                        : 'bg-black/10 dark:bg-white/10 hover:bg-black/20 text-slate-800 dark:text-slate-200'
-                    }`}
-                  >
-                    {sz}
-                  </button>
-                ))}
-              </div>
-
-              {/* Font Family Selector */}
-              <div className="flex items-center space-x-1">
-                {(['sans', 'serif', 'mono'] as const).map((fam) => (
-                  <button
-                    key={`fam-${fam}`}
-                    type="button"
-                    onClick={() => onUpdateNote(note.id, { fontFamily: fam })}
-                    className={`px-1.5 py-0.5 rounded text-[10px] capitalize transition-colors ${
-                      (note.fontFamily || 'sans') === fam
-                        ? 'bg-sky-500 text-white font-bold'
-                        : 'bg-black/10 dark:bg-white/10 hover:bg-black/20 text-slate-800 dark:text-slate-200'
-                    }`}
-                  >
-                    {fam}
-                  </button>
-                ))}
-              </div>
-
+            {/* Note Formatting Toolbar & AI Mode */}
+            <div className="px-3 pb-2.5 pt-2 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between flex-wrap gap-2 pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+              
               {/* Color Selector */}
-              <div className="flex items-center space-x-1">
+              <div className="flex items-center space-x-1.5">
                 {['yellow', 'blue', 'green', 'pink', 'purple'].map((col) => (
                   <button
                     key={`col-${col}`}
                     type="button"
                     onClick={() => onUpdateNote(note.id, { color: col })}
-                    className={`w-3.5 h-3.5 rounded-full border border-black/10 transition-transform hover:scale-110 ${
+                    className={`w-4 h-4 rounded-full border border-black/10 transition-transform ${
+                      (note.color || 'yellow') === col ? 'scale-125 ring-2 ring-sky-500/50' : 'hover:scale-110'
+                    } ${
                       col === 'yellow' ? 'bg-[#fef08a]' :
                       col === 'blue' ? 'bg-[#93c5fd]' :
                       col === 'green' ? 'bg-[#86efac]' :
                       col === 'pink' ? 'bg-[#fbcfe8]' :
                       'bg-[#c084fc]'
-                    } ${note.color === col ? 'ring-2 ring-sky-500 ring-offset-1' : ''}`}
-                    title={`Change color to ${col}`}
+                    }`}
+                    title={`${col} color`}
                   />
                 ))}
               </div>
+
+              {/* AI Mode Button */}
+              {onCircleToSearchAI && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onCircleToSearchAI(
+                      `Please explain and expand upon this whiteboard lesson note: "${note.title ? note.title + ' - ' : ''}${note.text}"`
+                    )
+                  }
+                  className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-sky-100 dark:bg-sky-500/20 text-sky-700 dark:text-sky-300 hover:bg-sky-200 dark:hover:bg-sky-500/30 transition-colors text-[10px] font-bold uppercase tracking-wider"
+                  title="Explain or expand note with Know Deep AI"
+                >
+                  <Sparkles className="w-3 h-3" />
+                  <span>AI Mode</span>
+                </button>
+              )}
             </div>
           </div>
         );
@@ -1359,6 +1563,18 @@ function drawBackground(
   } else if (bg === 'yellow') {
     ctx.fillStyle = '#fdfcf0';
     ctx.fillRect(0, 0, width, height);
+  } else if (bg === 'skyblue') {
+    ctx.fillStyle = '#e0f2fe';
+    ctx.fillRect(0, 0, width, height);
+  } else if (bg === 'peach') {
+    ctx.fillStyle = '#ffedd5';
+    ctx.fillRect(0, 0, width, height);
+  } else if (bg === 'lavender') {
+    ctx.fillStyle = '#f3e8ff';
+    ctx.fillRect(0, 0, width, height);
+  } else if (bg === 'rose') {
+    ctx.fillStyle = '#ffe4e6';
+    ctx.fillRect(0, 0, width, height);
   } else if (bg === 'chalkboard') {
     ctx.fillStyle = '#1b4332';
     ctx.fillRect(0, 0, width, height);
@@ -1372,6 +1588,30 @@ function drawBackground(
   } else if (bg === 'black') {
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(0, 0, width, height);
+  } else if (bg === 'midnight') {
+    ctx.fillStyle = '#0b1528';
+    ctx.fillRect(0, 0, width, height);
+
+    // Subtle atmospheric stars
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.035)';
+    for (let i = 0; i < 30; i++) {
+      const rx = (i * 127) % width;
+      const ry = (i * 149) % height;
+      ctx.beginPath();
+      ctx.arc(rx, ry, 1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (bg === 'graphite') {
+    ctx.fillStyle = '#181d24';
+    ctx.fillRect(0, 0, width, height);
+
+    // Subtle fine slate grain
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.02)';
+    for (let i = 0; i < 35; i++) {
+      const rx = (i * 113) % width;
+      const ry = (i * 167) % height;
+      ctx.fillRect(rx, ry, 40, 20);
+    }
   } else if (bg === 'grid') {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, width, height);
@@ -1431,6 +1671,22 @@ function drawBackground(
     ctx.moveTo(marginX, 0);
     ctx.lineTo(marginX, height);
     ctx.stroke();
+  } else if (bg === 'dots') {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+
+    const dotSpacing = 25;
+    const startX = (offsetX % dotSpacing) - dotSpacing;
+    const startY = (offsetY % dotSpacing) - dotSpacing;
+
+    ctx.fillStyle = '#cbd5e1';
+    for (let x = startX; x < width + dotSpacing; x += dotSpacing) {
+      for (let y = startY; y < height + dotSpacing; y += dotSpacing) {
+        ctx.beginPath();
+        ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
   }
 }
 
@@ -1454,10 +1710,14 @@ function drawSingleStroke(
   if (stroke.tool === 'eraser') {
     if (bg === 'chalkboard') ctx.strokeStyle = '#1b4332';
     else if (bg === 'black') ctx.strokeStyle = '#0f172a';
+    else if (bg === 'midnight') ctx.strokeStyle = '#0b1528';
+    else if (bg === 'graphite') ctx.strokeStyle = '#181d24';
     else ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = stroke.width;
   } else {
-    if ((bg === 'black' || bg === 'chalkboard') && stroke.color === '#0f172a') {
+    const isDarkBackground =
+      bg === 'black' || bg === 'chalkboard' || bg === 'midnight' || bg === 'graphite';
+    if (isDarkBackground && (stroke.color === '#0f172a' || stroke.color === '#000000')) {
       ctx.strokeStyle = '#f8fafc';
     } else {
       ctx.strokeStyle = stroke.color;
@@ -1490,17 +1750,21 @@ function drawSingleStroke(
       const dy = p2.y - p1.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
-      // Speed Factor: faster movement creates thinner stroke (emulates brush tension)
-      const speedFactor = Math.max(0.18, Math.min(1.4, 14 / (dist + 4)));
-      // Pressure Factor: higher pressure makes stroke wider
-      const pressureFactor = p2.pressure ? p2.pressure * 1.5 : 1.0;
+      // Speed Factor: faster movement creates thinner stroke (emulates brush velocity)
+      const speedFactor = Math.max(0.35, Math.min(1.35, 10 / (dist + 3)));
+      // Pressure Factor: stylus pressure or default pointer pressure
+      const pPressure = p2.pressure !== undefined && p2.pressure > 0 ? p2.pressure : 0.5;
+      const pressureFactor = 0.4 + pPressure * 1.4;
 
-      const localWidth = Math.max(1.2, Math.min(baseWidth * 2.5, baseWidth * speedFactor * pressureFactor));
-      const localOpacity = Math.max(0.35, Math.min(1.0, baseOpacity * (0.35 + pressureFactor * 0.65)));
+      const localWidth = Math.max(1.5, Math.min(baseWidth * 2.8, baseWidth * speedFactor * pressureFactor));
+      const localOpacity = Math.max(0.4, Math.min(1.0, baseOpacity * (0.45 + pressureFactor * 0.55)));
 
       ctx.save();
       ctx.beginPath();
+      const midX = (p1.x + p2.x) / 2;
+      const midY = (p1.y + p2.y) / 2;
       ctx.moveTo(p1.x, p1.y);
+      ctx.quadraticCurveTo(p1.x, p1.y, midX, midY);
       ctx.lineTo(p2.x, p2.y);
       ctx.lineWidth = localWidth;
       ctx.globalAlpha = localOpacity;
@@ -1511,19 +1775,35 @@ function drawSingleStroke(
     return;
   }
 
+  // Natural Quadratic Bezier Curve Smoothing Algorithm for Handwriting Ink
   ctx.beginPath();
-  ctx.moveTo(pts[0].x, pts[0].y);
-
-  for (let i = 1; i < pts.length - 1; i++) {
-    const xc = (pts[i].x + pts[i + 1].x) / 2;
-    const yc = (pts[i].y + pts[i + 1].y) / 2;
-    ctx.quadraticCurveTo(pts[i].x, pts[i].y, xc, yc);
+  
+  if (pts.length < 3) {
+    ctx.moveTo(pts[0].x, pts[0].y);
+    ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+  } else {
+    ctx.moveTo(pts[0].x, pts[0].y);
+    // Smooth intermediate segments using quadratic Bezier curve to midpoints
+    for (let i = 1; i < pts.length - 1; i++) {
+      const midX = (pts[i].x + pts[i + 1].x) / 2;
+      const midY = (pts[i].y + pts[i + 1].y) / 2;
+      ctx.quadraticCurveTo(pts[i].x, pts[i].y, midX, midY);
+    }
+    // Curve to the final point
+    const lastIdx = pts.length - 1;
+    ctx.quadraticCurveTo(
+      pts[lastIdx - 1].x,
+      pts[lastIdx - 1].y,
+      pts[lastIdx].x,
+      pts[lastIdx].y
+    );
   }
 
-  ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
   ctx.stroke();
   ctx.restore();
 }
+
+const imageCache: Record<string, HTMLImageElement> = {};
 
 function drawSingleShape(
   ctx: CanvasRenderingContext2D,
@@ -1619,6 +1899,30 @@ function drawSingleShape(
     }
     ctx.lineTo(cx, cy - outerR);
     ctx.closePath();
+    ctx.stroke();
+  } else if (type === 'flow-process') {
+    ctx.rect(x, y, width, height);
+    ctx.stroke();
+  } else if (type === 'flow-decision') {
+    ctx.moveTo(x + width / 2, y);
+    ctx.lineTo(x + width, y + height / 2);
+    ctx.lineTo(x + width / 2, y + height);
+    ctx.lineTo(x, y + height / 2);
+    ctx.closePath();
+    ctx.stroke();
+  } else if (type === 'venn') {
+    const rx = width / 2;
+    const ry = height / 2;
+    const r = Math.min(rx, ry);
+    
+    // Left circle
+    ctx.beginPath();
+    ctx.arc(x + width / 2 - r / 2, y + height / 2, r, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    // Right circle
+    ctx.beginPath();
+    ctx.arc(x + width / 2 + r / 2, y + height / 2, r, 0, Math.PI * 2);
     ctx.stroke();
   } else if (type === 'cube') {
     const size = Math.min(width, height);
@@ -1836,6 +2140,29 @@ function drawSingleShape(
       }
     }
     ctx.fillText(line, x, testY);
+  } else if (type === 'image' && shape.imageUrl) {
+    let img = imageCache[shape.imageUrl];
+    if (!img) {
+      img = new Image();
+      img.src = shape.imageUrl;
+      imageCache[shape.imageUrl] = img;
+    }
+    if (img.complete && img.naturalWidth > 0) {
+      ctx.drawImage(img, x, y, width, height);
+    } else {
+      ctx.fillStyle = '#f1f5f9';
+      ctx.fillRect(x, y, width, height);
+      ctx.strokeRect(x, y, width, height);
+      ctx.fillStyle = '#64748b';
+      ctx.font = '12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Loading Image...', x + width / 2, y + height / 2);
+      
+      img.onload = () => {
+        window.dispatchEvent(new CustomEvent('whiteboard-image-loaded'));
+      };
+    }
   }
 
   ctx.restore();
@@ -1845,16 +2172,32 @@ function drawSplitZoneDividers(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  zones: SplitZoneCount
+  zones: SplitZoneCount,
+  isStudentMode = false
 ) {
   ctx.save();
-  ctx.strokeStyle = '#0284c7';
-  ctx.lineWidth = 2;
-  ctx.setLineDash([8, 8]);
-
   const zoneWidth = width / zones;
+  const studentZoneColors = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899'];
+  const studentZoneBgTints = [
+    'rgba(59, 130, 246, 0.05)',
+    'rgba(16, 185, 129, 0.05)',
+    'rgba(245, 158, 11, 0.05)',
+    'rgba(236, 72, 153, 0.05)',
+  ];
+
+  // Tint each student zone in student mode (or whenever split screen is active)
+  for (let i = 0; i < zones; i++) {
+    const startX = i * zoneWidth;
+    ctx.fillStyle = studentZoneBgTints[i % 4];
+    ctx.fillRect(startX, 0, zoneWidth, height);
+  }
+
+  // Draw dividers
   for (let i = 1; i < zones; i++) {
     const x = i * zoneWidth;
+    ctx.strokeStyle = studentZoneColors[(i - 1) % 4];
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([8, 6]);
     ctx.beginPath();
     ctx.moveTo(x, 0);
     ctx.lineTo(x, height);

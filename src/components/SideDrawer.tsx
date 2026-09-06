@@ -19,7 +19,11 @@ import {
   Files,
   Globe,
   Key,
+  Presentation,
+  GraduationCap,
+  FileText,
 } from 'lucide-react';
+import { WhiteboardLogo } from './WhiteboardLogo';
 import { SplitZoneCount } from '../types';
 
 interface SideDrawerProps {
@@ -36,6 +40,7 @@ interface SideDrawerProps {
   onOpenFile: () => void;
   onQuickSave: () => void;
   onOpenSaveAs: () => void;
+  onExportPDF?: () => void;
   onUploadImage: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onOpenQRCode: () => void;
   onOpenEmail: () => void;
@@ -45,6 +50,9 @@ interface SideDrawerProps {
   onSwitchSide?: (side: 'left' | 'right') => void;
   onAddPage?: () => void;
   onOpenPagePreview?: () => void;
+  onOpenPPTUploader?: () => void;
+  isStudentMode?: boolean;
+  onToggleStudentMode?: () => void;
 }
 
 export const SideDrawer: React.FC<SideDrawerProps> = ({
@@ -61,6 +69,7 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
   onOpenFile,
   onQuickSave,
   onOpenSaveAs,
+  onExportPDF,
   onUploadImage,
   onOpenQRCode,
   onOpenEmail,
@@ -70,6 +79,9 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
   onSwitchSide,
   onAddPage,
   onOpenPagePreview,
+  onOpenPPTUploader,
+  isStudentMode = false,
+  onToggleStudentMode,
 }) => {
   const fileUploadInputRef = useRef<HTMLInputElement>(null);
   const menuContainerRef = useRef<HTMLDivElement>(null);
@@ -125,51 +137,51 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
         <div
           ref={leftPillRef}
           id="floating-side-pill-left"
-          className="fixed bottom-4 left-4 sm:left-6 z-30 flex flex-row items-center bg-[#136e80]/95 border border-[#2299b0]/80 rounded-full shadow-2xl backdrop-blur-md p-1.5 space-x-2.5 pointer-events-auto select-none transition-transform hover:scale-[1.02]"
+          className="fixed bottom-6 left-4 sm:left-6 z-30 flex flex-row items-center bg-[#136e80]/95 border border-[#2299b0]/80 rounded-full shadow-2xl backdrop-blur-md p-1 space-x-1.5 pointer-events-auto select-none transition-transform hover:scale-[1.02]"
         >
-          {/* Hamburger Menu (≡) icon */}
+          {/* Hamburger Menu (≡) icon replaced with logo */}
           <button
             id="left-hamburger-menu-btn"
             type="button"
             onClick={() => onToggleDrawer('left')}
-            className={`w-9 h-9 rounded-full flex items-center justify-center transition-all shadow-md active:scale-95 ${
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-md active:scale-95 ${
               isOpen && drawerSide === 'left'
-                ? 'bg-cyan-400 text-slate-950 scale-105 shadow-cyan-400/50'
-                : 'bg-[#19849a] text-cyan-100 hover:text-white hover:bg-[#209bb5] hover:scale-105'
+                ? 'bg-cyan-400 scale-105 shadow-cyan-400/50'
+                : 'bg-white/10 hover:bg-white/20 hover:scale-105'
             }`}
             title="Interactive Display Whiteboard Menu (Left)"
           >
-            <Menu className="w-5 h-5 stroke-[2.5]" />
+            <Menu className="w-4 h-4 text-white stroke-[2.5]" />
           </button>
 
           {/* Page Controller area in middle */}
-          <div className="flex items-center bg-[#0d5968] px-3.5 py-1 rounded-full border border-[#2299b0]/40 space-x-2">
+          <div className="flex items-center bg-[#0d5968] px-2 py-0.5 rounded-full border border-[#2299b0]/40 space-x-1">
             {currentPageIndex > 0 ? (
               <button
                 id="left-pill-prev-page"
                 type="button"
                 onClick={onPrevPage}
-                className="w-7 h-7 rounded-full flex items-center justify-center text-cyan-100 hover:bg-[#19849a] active:scale-95 transition-all"
+                className="w-6 h-6 rounded-full flex items-center justify-center text-cyan-100 hover:bg-[#19849a] active:scale-95 transition-all"
                 title="Previous Page ( < )"
               >
-                <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
+                <ChevronLeft className="w-3.5 h-3.5 stroke-[2.5]" />
               </button>
             ) : (
-              <div className="w-7" /> // Spacer when hidden to avoid shifting
+              <div className="w-6" /> // Spacer when hidden to avoid shifting
             )}
 
             {/* Page Adding & Count Display in the Middle */}
-            <div className="flex flex-col items-center justify-center min-w-[64px] text-center">
-              <span className="text-[10px] font-mono font-bold text-cyan-200">
+            <div className="flex flex-col items-center justify-center min-w-[48px] text-center">
+              <span className="text-[9px] font-mono font-bold text-cyan-200 leading-none mb-0.5">
                 {currentPageIndex + 1} / {totalPages}
               </span>
               <button
                 type="button"
                 onClick={onAddPage}
-                className="w-5 h-5 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center active:scale-90 transition-all mt-1"
+                className="w-4 h-4 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center active:scale-90 transition-all"
                 title="Add New Blank Page"
               >
-                <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                <Plus className="w-3 h-3 stroke-[3]" />
               </button>
             </div>
 
@@ -178,13 +190,13 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
                 id="left-pill-next-page"
                 type="button"
                 onClick={onNextPage}
-                className="w-7 h-7 rounded-full flex items-center justify-center text-cyan-100 hover:bg-[#19849a] active:scale-95 transition-all"
+                className="w-6 h-6 rounded-full flex items-center justify-center text-cyan-100 hover:bg-[#19849a] active:scale-95 transition-all"
                 title="Next Page ( > )"
               >
-                <ChevronRight className="w-4 h-4 stroke-[2.5]" />
+                <ChevronRight className="w-3.5 h-3.5 stroke-[2.5]" />
               </button>
             ) : (
-              <div className="w-7" /> // Spacer when hidden to avoid shifting
+              <div className="w-6" /> // Spacer when hidden to avoid shifting
             )}
           </div>
 
@@ -193,10 +205,10 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
             id="left-pill-switch-to-right-btn"
             type="button"
             onClick={() => handleSwitch('right')}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-cyan-200 hover:text-white bg-[#0e5766] hover:bg-[#19849a] border border-[#2299b0]/50 active:scale-95 transition-all"
+            className="w-6 h-6 rounded-full flex items-center justify-center text-cyan-200 hover:text-white bg-[#0e5766] hover:bg-[#19849a] border border-[#2299b0]/50 active:scale-95 transition-all"
             title="Move Controller to Right Side ( » )"
           >
-            <ChevronsRight className="w-4 h-4 stroke-[2.5]" />
+            <ChevronsRight className="w-3.5 h-3.5 stroke-[2.5]" />
           </button>
         </div>
       ) : (
@@ -226,47 +238,47 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
         <div
           ref={rightPillRef}
           id="floating-side-pill-right"
-          className="fixed bottom-4 right-4 sm:right-6 z-30 flex flex-row items-center bg-[#136e80]/95 border border-[#2299b0]/80 rounded-full shadow-2xl backdrop-blur-md p-1.5 space-x-2.5 pointer-events-auto select-none transition-transform hover:scale-[1.02]"
+          className="fixed bottom-6 right-4 sm:right-6 z-30 flex flex-row items-center bg-[#136e80]/95 border border-[#2299b0]/80 rounded-full shadow-2xl backdrop-blur-md p-1 space-x-1.5 pointer-events-auto select-none transition-transform hover:scale-[1.02]"
         >
           {/* Double Arrow to move controller to Left side */}
           <button
             id="right-pill-switch-to-left-btn"
             type="button"
             onClick={() => handleSwitch('left')}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-cyan-200 hover:text-white bg-[#0e5766] hover:bg-[#19849a] border border-[#2299b0]/50 active:scale-95 transition-all"
+            className="w-6 h-6 rounded-full flex items-center justify-center text-cyan-200 hover:text-white bg-[#0e5766] hover:bg-[#19849a] border border-[#2299b0]/50 active:scale-95 transition-all"
             title="Move Controller to Left Side ( « )"
           >
-            <ChevronsLeft className="w-4 h-4 stroke-[2.5]" />
+            <ChevronsLeft className="w-3.5 h-3.5 stroke-[2.5]" />
           </button>
 
           {/* Page Controller area in middle */}
-          <div className="flex items-center bg-[#0d5968] px-3.5 py-1 rounded-full border border-[#2299b0]/40 space-x-2">
+          <div className="flex items-center bg-[#0d5968] px-2 py-0.5 rounded-full border border-[#2299b0]/40 space-x-1">
             {currentPageIndex > 0 ? (
               <button
                 id="right-pill-prev-page"
                 type="button"
                 onClick={onPrevPage}
-                className="w-7 h-7 rounded-full flex items-center justify-center text-cyan-100 hover:bg-[#19849a] active:scale-95 transition-all"
+                className="w-6 h-6 rounded-full flex items-center justify-center text-cyan-100 hover:bg-[#19849a] active:scale-95 transition-all"
                 title="Previous Page ( < )"
               >
-                <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
+                <ChevronLeft className="w-3.5 h-3.5 stroke-[2.5]" />
               </button>
             ) : (
-              <div className="w-7" /> // Spacer when hidden to avoid shifting
+              <div className="w-6" /> // Spacer when hidden to avoid shifting
             )}
 
             {/* Page Adding & Count Display in the Middle */}
-            <div className="flex flex-col items-center justify-center min-w-[64px] text-center">
-              <span className="text-[10px] font-mono font-bold text-cyan-200">
+            <div className="flex flex-col items-center justify-center min-w-[48px] text-center">
+              <span className="text-[9px] font-mono font-bold text-cyan-200 leading-none mb-0.5">
                 {currentPageIndex + 1} / {totalPages}
               </span>
               <button
                 type="button"
                 onClick={onAddPage}
-                className="w-5 h-5 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center active:scale-90 transition-all mt-1"
+                className="w-4 h-4 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center active:scale-90 transition-all"
                 title="Add New Blank Page"
               >
-                <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                <Plus className="w-3 h-3 stroke-[3]" />
               </button>
             </div>
 
@@ -275,13 +287,13 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
                 id="right-pill-next-page"
                 type="button"
                 onClick={onNextPage}
-                className="w-7 h-7 rounded-full flex items-center justify-center text-cyan-100 hover:bg-[#19849a] active:scale-95 transition-all"
+                className="w-6 h-6 rounded-full flex items-center justify-center text-cyan-100 hover:bg-[#19849a] active:scale-95 transition-all"
                 title="Next Page ( > )"
               >
-                <ChevronRight className="w-4 h-4 stroke-[2.5]" />
+                <ChevronRight className="w-3.5 h-3.5 stroke-[2.5]" />
               </button>
             ) : (
-              <div className="w-7" /> // Spacer when hidden to avoid shifting
+              <div className="w-6" /> // Spacer when hidden to avoid shifting
             )}
           </div>
 
@@ -290,14 +302,14 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
             id="right-hamburger-menu-btn"
             type="button"
             onClick={() => onToggleDrawer('right')}
-            className={`w-9 h-9 rounded-full flex items-center justify-center transition-all shadow-md active:scale-95 ${
+            className={`w-7 h-7 rounded-full flex items-center justify-center transition-all shadow-md active:scale-95 ${
               isOpen && drawerSide === 'right'
                 ? 'bg-cyan-400 text-slate-950 scale-105 shadow-cyan-400/50'
                 : 'bg-[#19849a] text-cyan-100 hover:text-white hover:bg-[#209bb5] hover:scale-105'
             }`}
             title="Interactive Display Whiteboard Menu (Right)"
           >
-            <Menu className="w-5 h-5 stroke-[2.5]" />
+            <Menu className="w-4 h-4 stroke-[2.5]" />
           </button>
         </div>
       ) : (
@@ -332,9 +344,7 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
           {/* Header Bar */}
           <div className="flex items-center justify-between pb-2 mb-1.5 border-b border-cyan-400/20">
             <div className="flex items-center space-x-2">
-              <div className="w-6 h-6 rounded-lg bg-cyan-400/20 border border-cyan-300/40 flex items-center justify-center">
-                <Menu className="w-3.5 h-3.5 text-cyan-200" />
-              </div>
+              <WhiteboardLogo size={22} className="shrink-0" />
               <h3 className="text-xs font-bold text-white tracking-wide">
                 Whiteboard Menu
               </h3>
@@ -438,6 +448,24 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
               <span className="font-medium whitespace-nowrap">Save as</span>
             </button>
 
+            {/* Dedicated Export to PDF */}
+            <button
+              id="menu-item-export-pdf"
+              type="button"
+              onClick={() => {
+                if (onExportPDF) onExportPDF();
+                onCloseDrawer();
+              }}
+              className="w-full px-2.5 py-1.5 rounded-xl flex items-center space-x-2.5 text-white hover:bg-white/15 active:bg-white/25 transition-all text-left group"
+              title="Print-friendly classroom document export or save as PDF"
+            >
+              <FileText className="w-4 h-4 text-[#f43f5e] stroke-[2] shrink-0 group-hover:scale-110 transition-transform" />
+              <div className="flex items-center justify-between flex-1">
+                <span className="font-medium whitespace-nowrap">Export to PDF</span>
+                <span className="text-[9px] bg-rose-500/30 text-rose-200 px-1.5 py-0.5 rounded font-bold">PDF</span>
+              </div>
+            </button>
+
             {/* 5. Upload */}
             <button
               id="menu-item-upload"
@@ -494,9 +522,50 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
               <span className="font-medium whitespace-nowrap">Page Preview</span>
             </button>
 
-            {/* 8. AI Integration (Replacing Settings) */}
+            {/* PPT Uploader */}
             <button
-              id="menu-item-ai-integration"
+              id="menu-item-upload-ppt"
+              type="button"
+              onClick={() => {
+                if (onOpenPPTUploader) onOpenPPTUploader();
+                onCloseDrawer();
+              }}
+              className="w-full px-2.5 py-1.5 rounded-xl flex items-center space-x-2.5 text-white hover:bg-white/15 active:bg-white/25 transition-all text-left group"
+            >
+              <Presentation className="w-4 h-4 text-orange-400 stroke-[2] shrink-0 group-hover:scale-110 transition-transform" />
+              <span className="font-medium whitespace-nowrap">Upload PPT / Slides</span>
+            </button>
+
+            {/* Student Mode Toggle */}
+            {onToggleStudentMode && (
+              <button
+                id="menu-item-student-mode"
+                type="button"
+                onClick={() => {
+                  onToggleStudentMode();
+                  onCloseDrawer();
+                }}
+                className="w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between text-white hover:bg-white/15 active:bg-white/25 transition-all text-left group"
+              >
+                <div className="flex items-center space-x-2.5">
+                  <GraduationCap className="w-4 h-4 text-emerald-400 stroke-[2] shrink-0 group-hover:scale-110 transition-transform" />
+                  <span className="font-medium whitespace-nowrap">Student Mode</span>
+                </div>
+                <span
+                  className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                    isStudentMode
+                      ? 'bg-emerald-400 text-slate-950 font-black'
+                      : 'bg-white/10 text-cyan-200'
+                  }`}
+                >
+                  {isStudentMode ? 'ON' : 'OFF'}
+                </span>
+              </button>
+            )}
+
+            {/* Settings */}
+            <button
+              id="menu-item-settings"
               type="button"
               onClick={() => {
                 onOpenSettings();
@@ -504,8 +573,8 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
               }}
               className="w-full px-2.5 py-1.5 rounded-xl flex items-center space-x-2.5 text-white hover:bg-white/15 active:bg-white/25 transition-all text-left group"
             >
-              <Key className="w-4 h-4 text-[#cbd5e1] stroke-[2] shrink-0 group-hover:scale-110 transition-transform" />
-              <span className="font-medium whitespace-nowrap">AI Integration</span>
+              <Settings className="w-4 h-4 text-[#38bdf8] stroke-[2] shrink-0 group-hover:scale-110 transition-transform" />
+              <span className="font-medium whitespace-nowrap">Settings</span>
             </button>
 
             {/* 9. Exit */}

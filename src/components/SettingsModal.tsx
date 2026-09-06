@@ -35,6 +35,36 @@ const BACKGROUND_OPTIONS: { id: WhiteboardBackground; label: string; previewClas
     desc: 'Soothing classic cream yellow',
   },
   {
+    id: 'skyblue',
+    label: 'Sky Blue',
+    previewClass: 'bg-[#e0f2fe] border-[#bae6fd]',
+    desc: 'Calm and refreshing light sky blue',
+  },
+  {
+    id: 'peach',
+    label: 'Light Orange',
+    previewClass: 'bg-[#ffedd5] border-[#fed7aa]',
+    desc: 'Soft warm peach orange paper',
+  },
+  {
+    id: 'lavender',
+    label: 'Soft Lavender',
+    previewClass: 'bg-[#f3e8ff] border-[#e9d5ff]',
+    desc: 'Gentle pastel lilac purple',
+  },
+  {
+    id: 'rose',
+    label: 'Soft Rose',
+    previewClass: 'bg-[#ffe4e6] border-[#fecdd3]',
+    desc: 'Warm gentle pastel blush pink',
+  },
+  {
+    id: 'dots',
+    label: 'Dot Matrix',
+    previewClass: 'bg-white border-slate-300 [background-image:radial-gradient(#64748b_1.5px,transparent_1.5px)] [background-size:16px_16px]',
+    desc: 'Dotted bullet journal grid',
+  },
+  {
     id: 'chalkboard',
     label: 'Chalkboard Green',
     previewClass: 'bg-[#1b4332] border-[#2d6a4f]',
@@ -45,6 +75,18 @@ const BACKGROUND_OPTIONS: { id: WhiteboardBackground; label: string; previewClas
     label: 'Deep Black',
     previewClass: 'bg-[#0f172a] border-slate-700',
     desc: 'OLED dark mode for low-light classrooms',
+  },
+  {
+    id: 'midnight',
+    label: 'Midnight Blue',
+    previewClass: 'bg-[#0b1528] border-[#1e3a6a]',
+    desc: 'Deep navy dark blue for focused night sessions',
+  },
+  {
+    id: 'graphite',
+    label: 'Graphite Slate',
+    previewClass: 'bg-[#181d24] border-[#333b47]',
+    desc: 'Neutral dark charcoal gray chalkboard tone',
   },
   {
     id: 'grid',
@@ -66,7 +108,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onUpdateSettings,
   onClose,
 }) => {
-  const [activeTab, setActiveTab] = useState<'touch' | 'background'>('touch');
+  const [activeTab, setActiveTab] = useState<'touch' | 'background' | 'system'>('touch');
 
   if (!isOpen) return null;
 
@@ -132,6 +174,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           >
             <Palette className="w-4 h-4" />
             <span>Backgrounds</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('system')}
+            className={`pb-2.5 px-3 text-xs font-semibold border-b-2 flex items-center space-x-1.5 transition-all ${
+              activeTab === 'system'
+                ? 'border-sky-500 text-sky-600 dark:text-sky-400'
+                : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+            }`}
+          >
+            <Sliders className="w-4 h-4" />
+            <span>Preferences</span>
           </button>
         </div>
 
@@ -254,10 +309,100 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             </div>
           )}
+
+          {/* TAB 3: SYSTEM PREFERENCES */}
+          {activeTab === 'system' && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">
+                  System Preferences
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Customize the interface and behavior of the whiteboard.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                {/* Snap to Grid */}
+                <div
+                  onClick={() => onUpdateSettings({ snapToGrid: !settings.snapToGrid })}
+                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-start justify-between ${
+                    settings.snapToGrid
+                      ? 'border-sky-500 bg-sky-50/60 dark:bg-sky-950/30'
+                      : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <span className="text-xs font-bold text-slate-900 dark:text-white">
+                      Snap to Grid
+                    </span>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Automatically align shapes, sticky notes, and drawing tools to grid intersections.
+                    </p>
+                  </div>
+                  <div className={`w-10 h-5 rounded-full relative transition-colors ${settings.snapToGrid ? 'bg-sky-500' : 'bg-slate-300 dark:bg-slate-700'}`}>
+                    <div className={`absolute top-0.5 bottom-0.5 w-4 rounded-full bg-white transition-all shadow-sm ${settings.snapToGrid ? 'left-5' : 'left-0.5'}`} />
+                  </div>
+                </div>
+
+                {/* Toolbar Size Toggle */}
+                <div
+                  onClick={() => onUpdateSettings({ toolbarSize: settings.toolbarSize === 'large' ? 'normal' : 'large' })}
+                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-start justify-between ${
+                    settings.toolbarSize === 'large'
+                      ? 'border-sky-500 bg-sky-50/60 dark:bg-sky-950/30'
+                      : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <span className="text-xs font-bold text-slate-900 dark:text-white">
+                      Large Toolbar (Interactive Panels)
+                    </span>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Increases the size of the bottom toolbar for easier touch targets on large classroom displays.
+                    </p>
+                  </div>
+                  <div className={`w-10 h-5 rounded-full relative transition-colors ${settings.toolbarSize === 'large' ? 'bg-sky-500' : 'bg-slate-300 dark:bg-slate-700'}`}>
+                    <div className={`absolute top-0.5 bottom-0.5 w-4 rounded-full bg-white transition-all shadow-sm ${settings.toolbarSize === 'large' ? 'left-5' : 'left-0.5'}`} />
+                  </div>
+                </div>
+                
+                {/* Student Mode Toggle */}
+                <div
+                  onClick={() => onUpdateSettings({ studentMode: !settings.studentMode })}
+                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-start justify-between ${
+                    settings.studentMode
+                      ? 'border-sky-500 bg-sky-50/60 dark:bg-sky-950/30'
+                      : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <span className="text-xs font-bold text-slate-900 dark:text-white">
+                      Student Mode (Split Screen)
+                    </span>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Removes advanced features (AI, Browser, Pages, Timers) from split-screen zones for focused student work.
+                    </p>
+                  </div>
+                  <div className={`w-10 h-5 rounded-full relative transition-colors ${settings.studentMode ? 'bg-sky-500' : 'bg-slate-300 dark:bg-slate-700'}`}>
+                    <div className={`absolute top-0.5 bottom-0.5 w-4 rounded-full bg-white transition-all shadow-sm ${settings.studentMode ? 'left-5' : 'left-0.5'}`} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-850 flex justify-end">
+        <div className="px-6 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-850 flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+              Created by Ayush Yadav
+            </span>
+            <span className="text-[10px] text-cyan-600 dark:text-cyan-400 bg-cyan-100 dark:bg-cyan-950/60 px-2 py-0.5 rounded-full font-medium">
+              Lead Architect
+            </span>
+          </div>
           <button
             id="settings-done-button"
             type="button"

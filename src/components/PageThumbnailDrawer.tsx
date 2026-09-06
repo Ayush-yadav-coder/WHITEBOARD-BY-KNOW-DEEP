@@ -97,16 +97,49 @@ export const PageThumbnailDrawer: React.FC<PageThumbnailDrawerProps> = ({
                 )}
               </div>
 
-              {/* Middle preview representation */}
-              <div className="flex-1 my-1 bg-slate-900/60 rounded-lg border border-slate-800 flex items-center justify-center p-1">
-                <div className="text-center">
-                  <span className="text-[10px] text-slate-400 font-medium truncate block max-w-36">
-                    {p.title || `Lesson Page ${idx + 1}`}
-                  </span>
-                  <span className="text-[9px] text-slate-500">
-                    {p.strokes.length} drawings • {p.notes.length} notes
-                  </span>
-                </div>
+              {/* Middle preview representation with mini SVG thumbnail */}
+              <div className="flex-1 my-1 bg-slate-900/90 rounded-lg border border-slate-800/80 flex items-center justify-center p-1 relative overflow-hidden">
+                <svg
+                  className="w-full h-full pointer-events-none"
+                  viewBox="0 0 1200 800"
+                  preserveAspectRatio="xMidYMid meet"
+                >
+                  <rect width="1200" height="800" fill="#0f172a" rx="12" />
+                  {/* Draw mini shapes */}
+                  {p.shapes.map((s) => {
+                    if (s.type === 'rect') {
+                      return <rect key={s.id} x={s.x} y={s.y} width={s.width} height={s.height} fill="none" stroke={s.color || '#38bdf8'} strokeWidth={s.strokeWidth * 2} />;
+                    } else if (s.type === 'circle') {
+                      return <circle key={s.id} cx={s.x + s.width / 2} cy={s.y + s.height / 2} r={s.width / 2} fill="none" stroke={s.color || '#38bdf8'} strokeWidth={s.strokeWidth * 2} />;
+                    } else if (s.type === 'image' && s.imageUrl) {
+                      return <image key={s.id} x={s.x} y={s.y} width={s.width} height={s.height} href={s.imageUrl} preserveAspectRatio="xMidYMid slice" />;
+                    }
+                    return null;
+                  })}
+                  {/* Draw mini strokes */}
+                  {p.strokes.map((st, sIdx) => {
+                    if (!st.points || st.points.length < 2) return null;
+                    const pathData = st.points.reduce((acc, pt, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`, '');
+                    return (
+                      <path
+                        key={sIdx}
+                        d={pathData}
+                        fill="none"
+                        stroke={st.color || '#22d3ee'}
+                        strokeWidth={Math.max(2, st.width * 1.5)}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        opacity={st.isHighlighter ? 0.6 : 1}
+                      />
+                    );
+                  })}
+                </svg>
+
+                {p.strokes.length === 0 && p.shapes.length === 0 && p.notes.length === 0 && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-1 bg-slate-950/40">
+                    <span className="text-[10px] text-slate-500 font-medium">Blank Canvas</span>
+                  </div>
+                )}
               </div>
 
               {/* Bottom Actions: Duplicate & Delete */}

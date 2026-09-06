@@ -113,7 +113,7 @@ export const BrowserWidget: React.FC<BrowserWidgetProps> = ({ isOpen, onClose })
       className={`fixed z-35 bg-slate-900/95 border-2 border-slate-700/80 rounded-2xl shadow-2xl backdrop-blur-xl flex flex-col transition-all overflow-hidden ${
         isMaximized
           ? 'left-6 right-6 top-6 bottom-24'
-          : 'left-10 right-10 bottom-24 h-[58vh]'
+          : 'left-6 bottom-24 w-full sm:w-[25vw] min-w-[300px] max-w-[420px] h-[58vh]'
       }`}
       style={!isMaximized ? { transform: `translateY(${position.y > 100 ? 0 : 0}px)` } : undefined}
     >

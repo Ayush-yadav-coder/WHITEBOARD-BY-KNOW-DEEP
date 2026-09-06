@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   ToolType,
   ShapeType,
@@ -28,12 +28,19 @@ import { PeriodicTableModal } from './components/PeriodicTableModal';
 import { ClassroomPickerModal } from './components/ClassroomPickerModal';
 import { PageThumbnailDrawer } from './components/PageThumbnailDrawer';
 import { ShareLinkModal } from './components/ShareLinkModal';
-import { GeminiApiKeyModal } from './components/GeminiApiKeyModal';
 import { EmailModal } from './components/EmailModal';
 import { SaveAsModal } from './components/SaveAsModal';
+import { PPTUploaderModal, PPTSlide } from './components/PPTUploaderModal';
+import { QuizGeneratorModal } from './components/QuizGeneratorModal';
+import { WhiteboardLogo } from './components/WhiteboardLogo';
+import { WhiteboardSearchBar } from './components/WhiteboardSearchBar';
+import { PPTPresentationOverlay, ActivePresentationState } from './components/PPTPresentationOverlay';
+import { renderSlideToGraphicDataUrl } from './utils/slideRenderer';
+import { exportWhiteboardToPDF } from './utils/pdfExport';
 import { Maximize, Minimize } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { decodeBoardState } from './utils/shareableLink';
+import { OCRSearchMatch, CameraFocusTarget } from './types';
 
 export default function App() {
   // Page collection & active page index
@@ -70,6 +77,10 @@ export default function App() {
   // Fullscreen mode state
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isConvertingText, setIsConvertingText] = useState(false);
+
+  // Active PPT presentation overlay state (Goodly style presenter)
+  const [activePresentation, setActivePresentation] = useState<ActivePresentationState | null>(null);
+  const [isExportingPDF, setIsExportingPDF] = useState<boolean>(false);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -150,6 +161,8 @@ export default function App() {
   const [isPeriodicTableOpen, setIsPeriodicTableOpen] = useState(false);
   const [isClassroomPickerOpen, setIsClassroomPickerOpen] = useState(false);
   const [isThumbnailDrawerOpen, setIsThumbnailDrawerOpen] = useState(false);
+  const [isPPTModalOpen, setIsPPTModalOpen] = useState(false);
+  const [isQuizModalOpen, setIsQuizModalOpen] = useState(false);
 
   // Circle to Search AI Query trigger
   const [aiSearchQuery, setAiSearchQuery] = useState<CircleToSearchPayload | string | null>(null);
@@ -159,6 +172,37 @@ export default function App() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [drawerSide, setDrawerSide] = useState<'left' | 'right'>('left');
 
+  // OCR & Keyword Handwriting Search State
+  const [searchHighlight, setSearchHighlight] = useState<OCRSearchMatch | null>(null);
+  const [cameraFocusTarget, setCameraFocusTarget] = useState<CameraFocusTarget | null>(null);
+
+  const getCanvasSnapshotBase64 = useCallback((): string | null => {
+    const canvas = document.querySelector('canvas');
+    if (!canvas) return null;
+    try {
+      return canvas.toDataURL('image/jpeg', 0.85);
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const handleFocusOCRMatch = useCallback((match: OCRSearchMatch) => {
+    setSearchHighlight(match);
+    setCameraFocusTarget({
+      x: match.x,
+      y: match.y,
+      width: match.width,
+      height: match.height,
+      highlightText: match.text,
+      source: match.source,
+    });
+  }, []);
+
+  const handleClearSearchHighlight = useCallback(() => {
+    setSearchHighlight(null);
+    setCameraFocusTarget(null);
+  }, []);
+
   // Whiteboard Settings
   const [settings, setSettings] = useState<WhiteboardSettings>({
     multiTouchEnabled: true,
@@ -167,6 +211,11 @@ export default function App() {
     penWidth: 4,
     eraserSize: 32,
     gridSize: 25,
+    autoRecognizeShapes: false,
+    handwritingToText: false,
+    snapToGrid: false,
+    toolbarSize: 'normal',
+    studentMode: false,
   });
 
   // Load saved background preference from localStorage on mount & check for shareable board link
@@ -232,8 +281,10 @@ export default function App() {
     });
   };
 
-  // Change Pen Sub-Mode (Standard, Shape Pen, Text Pen, Highlighter)
-  const handleSelectPenMode = (mode: 'pen' | 'shape-pen' | 'text-pen' | 'highlighter') => {
+  // Change Pen Sub-Mode (Standard, Calligraphy, Pencil, Shape Pen, Text Pen, Highlighter)
+  const handleSelectPenMode = (
+    mode: 'pen' | 'pencil' | 'calligraphy' | 'shape-pen' | 'text-pen' | 'highlighter'
+  ) => {
     setActiveTool(mode);
     setDualPen((prev) => {
       const isA = prev.activePen === 'penA';
@@ -346,11 +397,12 @@ export default function App() {
           });
 
           const data = await res.json();
-          const recognizedText = data.success && data.text ? data.text : '[No readable text recognized]';
+          const recognizedText = data.success && data.text ? data.text.trim() : '';
 
           const textStrokeIds = textStrokes.map((st) => st.id);
+          const hasNoText = recognizedText === '' || recognizedText.includes('[No readable text recognized]') || recognizedText.includes('[No clear text recognized]');
 
-          const newTextShape: ShapeElement = {
+          const newTextShape: ShapeElement | null = hasNoText ? null : {
             id: `text-shape-${Date.now()}`,
             type: 'text',
             x: Math.max(40, minX - 20),
@@ -367,14 +419,14 @@ export default function App() {
           // Save current state into undo history
           pushToHistory(page);
 
-          // Update state: Filter out converted strokes and append the new editable text element
+          // Update state: Filter out converted strokes and append the new editable text element if recognized
           setPages((prevPages) =>
             prevPages.map((p, idx) =>
               idx === freshIndex
                 ? {
                     ...p,
                     strokes: p.strokes.filter((s) => !textStrokeIds.includes(s.id)),
-                    shapes: [...p.shapes, newTextShape],
+                    shapes: newTextShape ? [...p.shapes, newTextShape] : p.shapes,
                   }
                 : p
             )
@@ -571,6 +623,134 @@ export default function App() {
     setPages((prevPages) =>
       prevPages.map((page, idx) =>
         idx === currentPageIndex ? { ...page, notes: [...page.notes, newNote] } : page
+      )
+    );
+  };
+
+  // Start Goodly-style PPT Presentation
+  const handleStartPresentation = (slides: PPTSlide[]) => {
+    setActivePresentation({
+      slides,
+      currentSlideIndex: 0,
+      isCoverPage: true,
+      theme: 'modern-blue',
+    });
+  };
+
+  const handleNextSlide = () => {
+    setActivePresentation((prev) => {
+      if (!prev) return null;
+      const nextIdx = Math.min(prev.slides.length - 1, prev.currentSlideIndex + 1);
+      return { ...prev, currentSlideIndex: nextIdx };
+    });
+  };
+
+  const handlePrevSlide = () => {
+    setActivePresentation((prev) => {
+      if (!prev) return null;
+      const prevIdx = Math.max(0, prev.currentSlideIndex - 1);
+      return { ...prev, currentSlideIndex: prevIdx };
+    });
+  };
+
+  const handleJumpToSlide = (index: number) => {
+    setActivePresentation((prev) => {
+      if (!prev) return null;
+      return { ...prev, currentSlideIndex: Math.max(0, Math.min(prev.slides.length - 1, index)) };
+    });
+  };
+
+  const handleToggleCoverPage = () => {
+    setActivePresentation((prev) => {
+      if (!prev) return null;
+      return { ...prev, isCoverPage: !prev.isCoverPage };
+    });
+  };
+
+  const handleChangePresentationTheme = (
+    theme: 'modern-blue' | 'dark-slate' | 'emerald' | 'warm-amber'
+  ) => {
+    setActivePresentation((prev) => {
+      if (!prev) return null;
+      return { ...prev, theme };
+    });
+  };
+
+  // Import all PPT Slides as new whiteboard pages with graphic slide images (not text sticky notes)
+  const handleImportAllSlidesAsPages = (slides: PPTSlide[]) => {
+    const newPages: CanvasPage[] = slides.map((s, idx) => {
+      const slideImageUrl = renderSlideToGraphicDataUrl(s, idx, slides.length, 'modern-blue');
+      const slideImageShape: ShapeElement = {
+        id: `shape-slide-img-${Date.now()}-${idx}`,
+        type: 'image',
+        x: Math.max(20, (window.innerWidth - 1100) / 2),
+        y: Math.max(20, (window.innerHeight - 620) / 2),
+        width: 1100,
+        height: 618,
+        color: '#06b6d4',
+        strokeWidth: 0,
+        imageUrl: slideImageUrl,
+      };
+
+      return {
+        id: `page-ppt-${Date.now()}-${idx}`,
+        title: `Slide ${s.id}: ${s.title.slice(0, 24)}`,
+        strokes: [],
+        shapes: [slideImageShape],
+        notes: [],
+      };
+    });
+
+    setPages((prev) => [...prev, ...newPages]);
+    setCurrentPageIndex(pages.length);
+  };
+
+  // Insert a single PPT slide as a graphic image directly on the whiteboard canvas
+  const handleInsertSlideToCurrentPage = (slide: PPTSlide) => {
+    const slideImageUrl = renderSlideToGraphicDataUrl(slide, 0, 1, 'modern-blue');
+    const slideImageShape: ShapeElement = {
+      id: `shape-slide-img-${Date.now()}`,
+      type: 'image',
+      x: Math.max(30, (window.innerWidth - 960) / 2),
+      y: Math.max(30, (window.innerHeight - 540) / 2),
+      width: 960,
+      height: 540,
+      color: '#06b6d4',
+      strokeWidth: 0,
+      imageUrl: slideImageUrl,
+    };
+
+    setPages((prevPages) =>
+      prevPages.map((page, idx) =>
+        idx === currentPageIndex ? { ...page, shapes: [...page.shapes, slideImageShape] } : page
+      )
+    );
+  };
+
+  // Stamp quiz questions directly onto the whiteboard
+  const handleStampQuizToWhiteboard = (
+    questions: { id: number; question: string; options: string[]; correctIndex: number; explanation: string }[]
+  ) => {
+    const newNotes: CanvasNote[] = questions.map((q, idx) => {
+      const formattedText =
+        `### ❓ Quiz Q${q.id}\n${q.question}\n\n` +
+        q.options.map((opt, oIdx) => `${String.fromCharCode(65 + oIdx)}. ${opt}`).join('\n') +
+        `\n\n*(Answer: ${String.fromCharCode(65 + q.correctIndex)} — ${q.explanation})*`;
+
+      return {
+        id: `note-quiz-${Date.now()}-${idx}`,
+        x: 100 + (idx % 3) * 310,
+        y: 100 + Math.floor(idx / 3) * 240,
+        title: `❓ Quiz Q${q.id}`,
+        text: formattedText,
+        color: idx % 2 === 0 ? 'green' : 'yellow',
+        timestamp: Date.now(),
+      };
+    });
+
+    setPages((prevPages) =>
+      prevPages.map((page, idx) =>
+        idx === currentPageIndex ? { ...page, notes: [...page.notes, ...newNotes] } : page
       )
     );
   };
@@ -837,8 +1017,24 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
+  const handleExportPDF = async (exportAll = false) => {
+    setIsExportingPDF(true);
+    try {
+      await exportWhiteboardToPDF(pages, currentPageIndex, settings, activePresentation, exportAll);
+    } catch (err) {
+      console.error('PDF export error:', err);
+      try {
+        window.print();
+      } catch (printErr) {
+        console.warn('Fallback print error:', printErr);
+      }
+    } finally {
+      setIsExportingPDF(false);
+    }
+  };
+
   const handlePrintPDF = () => {
-    window.print();
+    handleExportPDF(false);
   };
 
   const handleUploadImage = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -864,20 +1060,24 @@ export default function App() {
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      const newNote: CanvasNote = {
-        id: `note-img-${Date.now()}`,
-        x: 100,
-        y: 100,
-        title: `Uploaded: ${file.name}`,
-        text: `[Image Asset Attached]\n${file.name}`,
-        color: 'blue',
-        timestamp: Date.now(),
+      const base64Url = event.target?.result as string;
+      const newImageShape: ShapeElement = {
+        id: `shape-img-${Date.now()}`,
+        type: 'image',
+        x: 150,
+        y: 150,
+        width: 400,
+        height: 300,
+        color: '#ffffff',
+        strokeWidth: 0,
+        imageUrl: base64Url,
       };
       setPages((prevPages) =>
         prevPages.map((page, idx) =>
-          idx === currentPageIndex ? { ...page, notes: [...page.notes, newNote] } : page
+          idx === currentPageIndex ? { ...page, shapes: [...page.shapes, newImageShape] } : page
         )
       );
+      setActiveTool('lasso');
     };
     reader.readAsDataURL(file);
   };
@@ -913,7 +1113,11 @@ export default function App() {
     });
   };
 
-  const isDarkBg = settings.background === 'black' || settings.background === 'chalkboard';
+  const isDarkBg =
+    settings.background === 'black' ||
+    settings.background === 'chalkboard' ||
+    settings.background === 'midnight' ||
+    settings.background === 'graphite';
 
   return (
     <div
@@ -921,6 +1125,10 @@ export default function App() {
       className={`relative w-screen h-screen overflow-hidden select-none transition-colors duration-300 ${
         settings.background === 'black' 
           ? 'bg-[#0f172a]' 
+          : settings.background === 'midnight'
+          ? 'bg-[#0b1528]'
+          : settings.background === 'graphite'
+          ? 'bg-[#181d24]'
           : settings.background === 'chalkboard'
           ? 'bg-[#1b4332]'
           : settings.background === 'beige'
@@ -929,23 +1137,21 @@ export default function App() {
           ? 'bg-[#f0f9f4]'
           : settings.background === 'yellow'
           ? 'bg-[#fdfcf0]'
+          : settings.background === 'skyblue'
+          ? 'bg-[#e0f2fe]'
+          : settings.background === 'peach'
+          ? 'bg-[#ffedd5]'
+          : settings.background === 'lavender'
+          ? 'bg-[#f3e8ff]'
+          : settings.background === 'rose'
+          ? 'bg-[#ffe4e6]'
           : 'bg-slate-50'
       }`}
     >
-      {/* BRANDING LOGO & FULLSCREEN TOGGLE (TOP LEFT) */}
+      {/* BRANDING LOGO, TITLE & FULLSCREEN TOGGLE (TOP LEFT CORNER) */}
       <div className="absolute top-4 left-4 z-20 pointer-events-auto flex items-center space-x-3 select-none">
-        {/* Our Whiteboard Logo (Replacing three-line menu) */}
-        <div className="animate-logo-appear shrink-0 group cursor-pointer" onClick={() => window.location.reload()}>
-          <svg viewBox="0 0 100 100" className={`w-12 h-12 shadow-md rounded-2xl border transition-all duration-300 group-hover:scale-105 group-active:scale-95 ${isDarkBg ? 'border-white/30 bg-[#a0d2f3]' : 'border-slate-200 bg-[#a0d2f3]'}`}>
-            <rect x="2" y="2" width="96" height="96" rx="20" fill="#a0d2f3" />
-            <path d="M 24 28 L 30 28 L 30 84 L 24 84 Z" fill="#ffffff" />
-            <path d="M 24 28 L 27 16 L 30 28 Z" fill="#ffffff" />
-            <path d="M 26.5 18 L 27 16 L 27.5 18 Z" fill={isDarkBg ? "#ffffff" : "#4b5563"} />
-            <rect x="25.5" y="44" width="3.5" height="16" rx="1.5" fill={isDarkBg ? "#ffffff" : "#1e293b"} />
-            <path d="M 44 32 Q 50 18 55 27 T 68 26 T 82 25" fill="none" stroke={isDarkBg ? "#ffffff" : "#1e293b"} strokeWidth="5.5" strokeLinecap="round" />
-            <path d="M 44 50 Q 50 36 55 45 T 68 44 T 82 43" fill="none" stroke={isDarkBg ? "#ffffff" : "#1e293b"} strokeWidth="5.5" strokeLinecap="round" />
-          </svg>
-        </div>
+        {/* Whiteboard Note Logo from user photo */}
+        <WhiteboardLogo size={40} className="shrink-0" />
 
         {/* Sliding Text Brand Container */}
         <div className="animate-text-slide-in flex flex-col items-start leading-none pr-1">
@@ -972,6 +1178,31 @@ export default function App() {
         </button>
       </div>
 
+      {/* OCR HANDWRITING & KEYWORD SEARCH BAR (TOP CENTER) */}
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 pointer-events-auto flex items-center justify-center">
+        <WhiteboardSearchBar
+          isDarkBg={isDarkBg}
+          strokes={currentPage.strokes}
+          shapes={currentPage.shapes}
+          notes={currentPage.notes}
+          onFocusMatch={handleFocusOCRMatch}
+          onClearHighlight={handleClearSearchHighlight}
+          getCanvasSnapshotBase64={getCanvasSnapshotBase64}
+        />
+      </div>
+
+      {/* 5. GOODLY-STYLE PPT PRESENTATION SLIDE OVERLAY (Full Board Cover / Windowed, Attached Controls, Top-Right Cross) */}
+      <PPTPresentationOverlay
+        presentation={activePresentation}
+        onClose={() => setActivePresentation(null)}
+        onNextSlide={handleNextSlide}
+        onPrevSlide={handlePrevSlide}
+        onJumpToSlide={handleJumpToSlide}
+        onToggleCoverPage={handleToggleCoverPage}
+        onChangeTheme={handleChangePresentationTheme}
+        onExportCurrentSlidePDF={() => handleExportPDF(false)}
+      />
+
       {/* 1. FULLSCREEN HTML5 CANVAS */}
       <WhiteboardCanvas
         strokes={currentPage.strokes}
@@ -986,6 +1217,8 @@ export default function App() {
         settings={settings}
         splitZones={splitZones}
         pageSlideOffset={pageSlideOffset}
+        searchHighlight={searchHighlight}
+        cameraFocusTarget={cameraFocusTarget}
         onAddStroke={handleAddStroke}
         onAddShape={handleAddShape}
         onUpdateNote={handleUpdateNote}
@@ -1052,6 +1285,8 @@ export default function App() {
         }
         onOpenPeriodicTable={() => setIsPeriodicTableOpen(true)}
         onOpenClassroomPicker={() => setIsClassroomPickerOpen(true)}
+        onOpenQuizGenerator={() => setIsQuizModalOpen(true)}
+        onOpenPPTUploader={() => setIsPPTModalOpen(true)}
         onAddStickyNote={handleAddStickyNote}
         onSlidePageLeft={handleSlidePageLeft}
         onToggleBrowser={() => setIsBrowserOpen(!isBrowserOpen)}
@@ -1093,10 +1328,14 @@ export default function App() {
         onOpenFile={handleOpenFile}
         onQuickSave={handleQuickSave}
         onOpenSaveAs={() => setIsSaveAsOpen(true)}
+        onExportPDF={handlePrintPDF}
         onUploadImage={handleUploadImage}
         onOpenQRCode={() => setIsShareLinkOpen(true)}
         onOpenEmail={() => setIsEmailOpen(true)}
-        onOpenSettings={() => setIsGeminiKeyOpen(true)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenPPTUploader={() => setIsPPTModalOpen(true)}
+        isStudentMode={settings.studentMode}
+        onToggleStudentMode={() => handleUpdateSettings({ studentMode: !settings.studentMode })}
         onExit={handleExit}
         onChangeSplitZones={setSplitZones}
         onAddPage={handleAddPage}
@@ -1157,9 +1396,70 @@ export default function App() {
         isOpen={isPeriodicTableOpen}
         onClose={() => setIsPeriodicTableOpen(false)}
         onStampElement={(el) => {
-          handlePasteToWhiteboard(
-            `⚛️ ELEMENT: ${el.name} (${el.symbol})\n• Atomic Number: ${el.number}\n• Atomic Mass: ${el.mass} u\n• Group: ${el.group} | Period: ${el.period}\n• Category: ${el.category}`,
-            `Element #${el.number} - ${el.name}`
+          // Generate inline SVG Data URL for the element card
+          const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="180" height="220" viewBox="0 0 180 220" style="background:#090d16; font-family:sans-serif; rx:16px;">
+            <rect width="180" height="220" rx="16" fill="#0f172a" stroke="#06b6d4" stroke-width="3"/>
+            <text x="16" y="28" font-size="14" font-weight="bold" fill="#06b6d4">${el.number}</text>
+            <text x="160" y="28" font-size="10" font-weight="bold" fill="#94a3b8" text-anchor="end">${el.category.toUpperCase().slice(0,8)}</text>
+            <text x="90" y="105" font-size="52" font-weight="900" fill="#ffffff" text-anchor="middle">${el.symbol}</text>
+            <text x="90" y="145" font-size="16" font-weight="bold" fill="#38bdf8" text-anchor="middle">${el.name}</text>
+            <text x="90" y="175" font-size="12" fill="#cbd5e1" text-anchor="middle">Mass: ${el.mass} u</text>
+            <text x="90" y="195" font-size="10" fill="#64748b" text-anchor="middle">Group ${el.group} • Period ${el.period}</text>
+          </svg>`;
+          const svgDataUrl = 'data:image/svg+xml;base64,' + btoa(svgContent);
+
+          const newImageShape: ShapeElement = {
+            id: `shape-elem-img-${Date.now()}`,
+            type: 'image',
+            x: window.innerWidth / 2 - 90,
+            y: window.innerHeight / 2 - 110,
+            width: 180,
+            height: 220,
+            color: '#06b6d4',
+            strokeWidth: 2,
+            imageUrl: svgDataUrl,
+          };
+
+          const newTextShape: ShapeElement = {
+            id: `shape-elem-txt-${Date.now() + 1}`,
+            type: 'text',
+            x: window.innerWidth / 2 + 100,
+            y: window.innerHeight / 2 - 50,
+            width: 260,
+            height: 100,
+            color: '#06b6d4',
+            strokeWidth: 2,
+            text: `⚛️ ${el.name} (${el.symbol})\nAtomic Number: ${el.number}\nAtomic Mass: ${el.mass} u\nCategory: ${el.category}`,
+            fontSize: 16,
+          };
+
+          setPages((prevPages) =>
+            prevPages.map((page, idx) =>
+              idx === currentPageIndex
+                ? { ...page, shapes: [...page.shapes, newImageShape, newTextShape] }
+                : page
+            )
+          );
+          setIsPeriodicTableOpen(false);
+        }}
+        onStampFullTableImage={() => {
+          const fullTableShape: ShapeElement = {
+            id: `shape-full-periodic-${Date.now()}`,
+            type: 'image',
+            x: Math.max(20, window.innerWidth / 2 - 350),
+            y: Math.max(40, window.innerHeight / 2 - 220),
+            width: 700,
+            height: 440,
+            color: '#06b6d4',
+            strokeWidth: 2,
+            imageUrl: '/periodic-table.svg',
+          };
+          setPages((prevPages) =>
+            prevPages.map((page, idx) =>
+              idx === currentPageIndex
+                ? { ...page, shapes: [...page.shapes, fullTableShape] }
+                : page
+            )
           );
           setIsPeriodicTableOpen(false);
         }}
@@ -1195,12 +1495,6 @@ export default function App() {
         onClose={() => setIsSettingsOpen(false)}
       />
 
-      {/* GEMINI API KEY CONFIGURATION MODAL */}
-      <GeminiApiKeyModal
-        isOpen={isGeminiKeyOpen}
-        onClose={() => setIsGeminiKeyOpen(false)}
-      />
-
       {/* SHARE LINK STUDENT SCREEN SHARE MODAL */}
       <ShareLinkModal
         isOpen={isShareLinkOpen}
@@ -1213,6 +1507,25 @@ export default function App() {
         onClose={() => setIsEmailOpen(false)}
         getCanvasImage={getCanvasImage}
         pages={pages}
+      />
+
+      {/* PPT / SLIDES UPLOADER & VIEWER MODAL */}
+      <PPTUploaderModal
+        isOpen={isPPTModalOpen}
+        onClose={() => setIsPPTModalOpen(false)}
+        onImportAllPages={handleImportAllSlidesAsPages}
+        onInsertSlideToCurrentPage={handleInsertSlideToCurrentPage}
+        onStartPresentation={handleStartPresentation}
+      />
+
+      {/* INTERACTIVE CLASSROOM QUIZ GENERATOR MODAL */}
+      <QuizGeneratorModal
+        isOpen={isQuizModalOpen}
+        onClose={() => setIsQuizModalOpen(false)}
+        notes={currentPage?.notes || []}
+        strokes={currentPage?.strokes || []}
+        shapes={currentPage?.shapes || []}
+        onStampQuizToWhiteboard={handleStampQuizToWhiteboard}
       />
 
       {/* SAVE AS MODAL */}

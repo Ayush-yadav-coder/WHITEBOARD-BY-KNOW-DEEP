@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
+  ExternalLink,
   X,
   Mic,
   Camera,
@@ -67,6 +68,9 @@ export const KnowDeepAI: React.FC<KnowDeepAIProps> = ({
   const isControlled = controlledIsOpen !== undefined;
   const isDrawerOpen = isControlled ? controlledIsOpen : internalIsOpen;
 
+  const [hasStartedChat, setHasStartedChat] = useState(false);
+  const [isChatFullscreen, setIsChatFullscreen] = useState(false);
+
   const handleOpen = () => {
     if (onOpen) onOpen();
     setInternalIsOpen(true);
@@ -75,19 +79,14 @@ export const KnowDeepAI: React.FC<KnowDeepAIProps> = ({
   const handleClose = () => {
     if (onClose) onClose();
     setInternalIsOpen(false);
-    // Clear chat history entirely on close, leaving only initial welcome
-    setMessages([
-      {
-        id: 'welcome-msg',
-        role: 'model',
-        text: `👋 Hello! I am Know Deep AI, your digital whiteboard teaching assistant.\n\n✨ **Circle to Search Math & Subject Expert:** Circle any drawing, worksheet, or formula on the canvas using the Dragger tool to ask me questions, and I will analyze it instantly!\n\nYou can also ask questions or paste solutions directly onto your whiteboard.`,
-        timestamp: Date.now(),
-      },
-    ]);
+    // Clear chat history entirely on close, leaving a clean slate
+    setMessages([]);
     setPrompt('');
     setIsLoading(false);
     setImagePreview(null);
     setLastSelectionBounds(null);
+    setHasStartedChat(false);
+    setIsChatFullscreen(false);
   };
 
   const [prompt, setPrompt] = useState('');
@@ -102,15 +101,8 @@ export const KnowDeepAI: React.FC<KnowDeepAIProps> = ({
     maxY: number;
   } | null>(null);
 
-  // Multi-turn conversation history
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'welcome-msg',
-      role: 'model',
-      text: `👋 Hello! I am Know Deep AI, your digital whiteboard teaching assistant.\n\n✨ **Circle to Search Math & Subject Expert:** Circle any drawing, worksheet, or formula on the canvas using the Dragger tool to ask me questions, and I will analyze it instantly!\n\nYou can also ask questions or paste solutions directly onto your whiteboard.`,
-      timestamp: Date.now(),
-    },
-  ]);
+  // Multi-turn conversation history starts as a clean slate (no AI pre-populated greeting)
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -139,6 +131,7 @@ export const KnowDeepAI: React.FC<KnowDeepAIProps> = ({
   useEffect(() => {
     if (externalQuery) {
       handleOpen();
+      setHasStartedChat(true);
       if (typeof externalQuery === 'object') {
         if (externalQuery.selectionBounds) {
           setLastSelectionBounds(externalQuery.selectionBounds);
@@ -194,6 +187,23 @@ export const KnowDeepAI: React.FC<KnowDeepAIProps> = ({
       }
     }
   }, []);
+
+  // Speak the welcome greeting when the welcome overlay is displayed
+  useEffect(() => {
+    if (isDrawerOpen && !hasStartedChat) {
+      try {
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance("Hello, how can I help you today?");
+          utterance.rate = 0.95;
+          utterance.pitch = 1.05;
+          window.speechSynthesis.speak(utterance);
+        }
+      } catch (e) {
+        console.warn("Speech synthesis greeting ignored or blocked by browser gesture rules:", e);
+      }
+    }
+  }, [isDrawerOpen, hasStartedChat]);
 
   const toggleMic = () => {
     if (!recognitionRef.current) {
@@ -451,61 +461,171 @@ export const KnowDeepAI: React.FC<KnowDeepAIProps> = ({
     return null;
   }
 
+  // 1. GORGEOUS GEMINI-STYLE FULL-SCREEN LANDING OVERLAY (First Page / Welcome Speech)
+  if (!hasStartedChat) {
+    return (
+      <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-6 md:p-12 text-center animate-in fade-in duration-500 select-none overflow-hidden font-sans">
+        {/* Futuristic glowing aurora-like lights in background */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(6,182,212,0.12)_0%,transparent_60%)] pointer-events-none" />
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-600/10 rounded-full filter blur-[100px] animate-pulse pointer-events-none" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-cyan-600/10 rounded-full filter blur-[100px] animate-pulse pointer-events-none" />
+
+        {/* Top bar actions for closing */}
+        <div className="absolute top-6 right-6 flex items-center space-x-4">
+          <button
+            type="button"
+            onClick={handleClose}
+            className="p-2 text-slate-400 hover:text-white hover:bg-slate-900 rounded-full border border-slate-800/80 transition-all hover:scale-110"
+            title="Close Welcome Page"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="flex flex-col items-center justify-center max-w-4xl w-full px-4 animate-in zoom-in-95 duration-700">
+          {/* Circular Know Deep Brand Logo */}
+          <div className="w-20 h-20 rounded-3xl overflow-hidden bg-black border border-cyan-400/80 shadow-[0_0_24px_rgba(6,182,212,0.5)] flex items-center justify-center mb-10 shrink-0">
+            <img src="/ai-logo.svg" alt="Know Deep" className="w-full h-full object-contain" />
+          </div>
+
+          {/* Majestic "Hello," Big White Font */}
+          <h1 className="text-white text-5xl md:text-7xl font-extrabold tracking-tight leading-none mb-3 font-sans">
+            Hello,
+          </h1>
+          
+          {/* "How can I help you today?" Gemini-style Rainbow/Multi-color Gradient Text */}
+          <h2 className="text-transparent bg-clip-text bg-gradient-to-r from-[#4285F4] via-[#9B51E0] via-[#EC4899] to-[#F2994A] text-4xl md:text-6xl font-black tracking-tight leading-none mb-12 animate-pulse font-sans pb-2">
+            How can I help you today?
+          </h2>
+
+          {/* Central Search Query / Message input */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const val = prompt.trim();
+              if (val) {
+                setHasStartedChat(true);
+                sendMessage(val);
+              }
+            }}
+            className="w-full max-w-2xl bg-slate-900/95 border border-slate-800 hover:border-cyan-500/50 focus-within:border-cyan-400 focus-within:ring-4 focus-within:ring-cyan-500/15 rounded-3xl py-3 px-4 flex items-center space-x-3 shadow-[0_35px_70px_rgba(0,0,0,0.8)] transition-all duration-300"
+          >
+            <input
+              type="text"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="Ask Know Deep any question or request whiteboard notes..."
+              className="flex-1 bg-transparent text-white text-sm md:text-base border-none outline-none placeholder-slate-500 py-1"
+              autoFocus
+            />
+            
+            <button
+              type="button"
+              onClick={toggleMic}
+              className={`p-2.5 rounded-2xl transition-all ${
+                isListening
+                  ? 'bg-rose-500/20 text-rose-400 animate-pulse'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-850'
+              }`}
+              title="Voice Speech Input"
+            >
+              <Mic className="w-4 h-4" />
+            </button>
+
+            <button
+              type="submit"
+              disabled={!prompt.trim()}
+              className="p-2.5 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white rounded-2xl shadow-lg transition-all hover:scale-105 active:scale-95 disabled:opacity-40"
+            >
+              <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+            </button>
+          </form>
+
+          {/* Prompt quick triggers */}
+          <div className="mt-8 flex flex-wrap justify-center gap-2.5 max-w-xl">
+            {[
+              'Explain Pythagoras Theorem',
+              'Summarize Newton Laws',
+              'Steps for Quadratic Equation',
+              'Explain Photosynthesis'
+            ].map((sug) => (
+              <button
+                key={sug}
+                type="button"
+                onClick={() => {
+                  setHasStartedChat(true);
+                  sendMessage(sug);
+                }}
+                className="px-4 py-1.5 rounded-full text-xs font-semibold text-slate-300 bg-slate-900 hover:text-white hover:bg-slate-850 border border-slate-800 hover:border-cyan-500/30 transition-all hover:scale-105"
+              >
+                {sug}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. CHAT SIDEBAR VIEW: TAKES UP 1/4 OF THE SCREEN ON THE RIGHT SIDE BY DEFAULT, TOGGLEABLE TO FULLSCREEN
   return (
     <div
       id="main-know-deep-ai-container"
-      className={`fixed bottom-20 left-1/2 z-40 pointer-events-auto transition-transform duration-300 ease-in-out ${
-        drawerSide === 'left'
-          ? '-translate-x-[42%] md:-translate-x-[38%]'
-          : '-translate-x-[58%] md:-translate-x-[62%]'
+      className={`fixed z-40 pointer-events-auto transition-all duration-300 ease-in-out ${
+        isChatFullscreen
+          ? 'inset-0 w-full h-full'
+          : 'right-2 top-20 bottom-24 w-full sm:w-[25vw] min-w-[280px] max-w-[400px]'
       }`}
     >
-      {/* Expanded Multi-turn Chatbot Drawer in Main Area */}
+      {/* Drawer Container */}
       <div
         id="know-deep-ai-drawer"
-        className="w-[94vw] sm:w-[480px] max-w-[540px] bg-slate-950/95 border-2 border-cyan-500/50 rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.8),0_0_30px_rgba(6,182,212,0.35)] backdrop-blur-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
-        style={{ height: '600px', maxHeight: 'calc(100vh - 100px)' }}
+        className={`bg-slate-950/95 border-2 border-cyan-500/50 shadow-[0_20px_60px_rgba(0,0,0,0.8),0_0_30px_rgba(6,182,212,0.35)] backdrop-blur-2xl flex flex-col overflow-hidden duration-200 h-full ${
+          isChatFullscreen ? 'rounded-none border-none' : 'rounded-3xl'
+        }`}
       >
-        {/* Drawer Header with Logo & Fullscreen Preview in Top Right Corner */}
-        <div className="flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-10 h-10 rounded-xl overflow-hidden bg-black border border-cyan-400/80 shadow-[0_0_12px_rgba(6,182,212,0.6)] flex items-center justify-center shrink-0">
-              <AiLogo size={40} animate={false} />
+        {/* Drawer Header with Logo & Fullscreen Toggle in Top Right Corner */}
+        <div className="flex items-center justify-between px-3 py-3 bg-slate-900 border-b border-slate-800 shrink-0">
+          <div className="flex items-center space-x-2 overflow-hidden">
+            <div className="w-8 h-8 rounded-lg overflow-hidden bg-black border border-cyan-400/80 shadow-[0_0_8px_rgba(6,182,212,0.5)] flex items-center justify-center shrink-0">
+              <img src="/ai-logo.svg" alt="Know Deep" className="w-full h-full object-contain" />
             </div>
-            <div>
-              <div className="flex items-center space-x-1.5">
-                <h2 className="text-sm font-bold text-white tracking-wide">
-                  Know Deep AI
-                </h2>
-                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-                  Math Solver
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-400">Classroom Teaching Assistant &amp; OCR</p>
+            <div className="overflow-hidden">
+              <h2 className="text-xs font-bold text-white tracking-wide truncate">
+                Know Deep
+              </h2>
+              <p className="text-[9px] text-slate-400 truncate">Teaching Assistant</p>
             </div>
           </div>
-
-          {/* Top Right Corner Actions: Full Screen Preview to Open Know Deep, Close */}
-          <div className="flex items-center space-x-1.5">
+ 
+          {/* Top Right Corner Actions: Open External Link, Close */}
+          <div className="flex items-center space-x-1 shrink-0">
             <button
-              id="know-deep-fullscreen-preview-btn"
+              id="know-deep-chat-fullscreen-toggle"
               type="button"
-              onClick={handleOpenKnowDeepFullscreen}
-              className="flex items-center space-x-1 px-2.5 py-1 text-xs font-semibold text-cyan-300 hover:text-white bg-cyan-950/70 hover:bg-cyan-900/80 border border-cyan-500/40 rounded-xl transition-all hover:scale-105 active:scale-95 shadow-sm"
-              title="Full Screen Preview - Open Know Deep (https://know-deep.lovable.app)"
+              onClick={() => setIsChatFullscreen(!isChatFullscreen)}
+              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+              title={isChatFullscreen ? "Exit Full Screen" : "Open Know Deep Full Screen"}
             >
-              <Maximize2 className="w-3.5 h-3.5" />
-              <span className="text-[11px] font-medium whitespace-nowrap">Open Know Deep</span>
+              <Maximize2 className={`w-3.5 h-3.5 transition-transform duration-200 ${isChatFullscreen ? 'scale-90 opacity-70' : ''}`} />
             </button>
-
+            <button
+              id="know-deep-chat-external-link"
+              type="button"
+              onClick={() => window.open('https://know-deep.lovable.app/', '_blank')}
+              className="p-1.5 text-cyan-400 hover:text-cyan-300 hover:bg-slate-800 rounded-lg transition-colors"
+              title="Open Know Deep Website"
+            >
+              <ExternalLink className="w-3.5 h-3.5 transition-transform duration-200" />
+            </button>
             <button
               id="know-deep-ai-close"
               type="button"
               onClick={handleClose}
-              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+              className="p-1.5 text-slate-400 hover:text-white hover:bg-rose-500/80 rounded-lg transition-colors"
               title="Close"
             >
-              <X className="w-4 h-4" />
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -566,6 +686,18 @@ export const KnowDeepAI: React.FC<KnowDeepAIProps> = ({
                         id={`math-solution-card-${msg.id}`}
                         className="bg-slate-900/90 border-2 border-cyan-500/40 rounded-2xl rounded-tl-none p-4 text-slate-100 shadow-xl space-y-3"
                       >
+                        {/* Beautiful Know Deep Logo Image Header */}
+                        <div className="w-full h-28 rounded-xl overflow-hidden bg-slate-950 border border-cyan-500/30 flex items-center justify-center p-2 relative group shadow-inner">
+                          <img
+                            src="/ai-logo.svg"
+                            alt="Know Deep"
+                            className="h-full object-contain filter drop-shadow-[0_0_15px_rgba(6,182,212,0.4)] transition-all duration-300 group-hover:scale-105"
+                          />
+                          <div className="absolute top-2 right-2 px-1.5 py-0.5 text-[8px] tracking-widest font-black uppercase bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded">
+                            Know Deep
+                          </div>
+                        </div>
+
                         {/* Header: Recognized Status & Topic */}
                         <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
                           <div className="flex items-center space-x-2">
@@ -718,8 +850,21 @@ export const KnowDeepAI: React.FC<KnowDeepAIProps> = ({
                       </div>
                     ) : msg.role === 'model' ? (
                       /* ====== STANDARD PEDAGOGICAL MESSAGE ====== */
-                      <div className="bg-slate-900 text-slate-200 border border-slate-800 rounded-2xl rounded-tl-none px-3.5 py-2.5 text-xs leading-relaxed shadow-md whitespace-pre-wrap font-sans">
-                        {msg.text}
+                      <div className="bg-slate-900 text-slate-200 border border-slate-800 rounded-2xl rounded-tl-none p-3 text-xs leading-relaxed shadow-md whitespace-pre-wrap font-sans flex flex-col space-y-3">
+                        {/* Beautiful Know Deep Logo Image Header */}
+                        <div className="w-full h-28 rounded-xl overflow-hidden bg-slate-950 border border-cyan-500/30 flex items-center justify-center p-2 relative group shadow-inner">
+                          <img
+                            src="/ai-logo.svg"
+                            alt="Know Deep"
+                            className="h-full object-contain filter drop-shadow-[0_0_15px_rgba(6,182,212,0.4)] transition-all duration-300 group-hover:scale-105"
+                          />
+                          <div className="absolute top-2 right-2 px-1.5 py-0.5 text-[8px] tracking-widest font-black uppercase bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded">
+                            Know Deep
+                          </div>
+                        </div>
+                        <div>
+                          {msg.text}
+                        </div>
                       </div>
                     ) : null}
                   </div>
@@ -743,7 +888,7 @@ export const KnowDeepAI: React.FC<KnowDeepAIProps> = ({
 
                     <button
                       type="button"
-                      onClick={() => onPasteToWhiteboard(msg.text, 'Know Deep AI Note')}
+                      onClick={() => onPasteToWhiteboard(msg.text, 'Know Deep Note')}
                       className="text-cyan-400 hover:text-cyan-300 font-semibold flex items-center space-x-1 bg-cyan-950/50 hover:bg-cyan-900/50 px-2 py-0.5 rounded border border-cyan-800/50 transition-colors"
                     >
                       <PlusCircle className="w-3 h-3" />

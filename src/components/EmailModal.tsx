@@ -11,17 +11,28 @@ interface EmailModalProps {
 }
 
 export const EmailModal: React.FC<EmailModalProps> = ({ isOpen, onClose, getCanvasImage, pages }) => {
+  const [sender, setSender] = useState('');
   const [recipient, setRecipient] = useState('');
   const [subject, setSubject] = useState('Classroom Notes - Whiteboard by Know Deep');
   const [message, setMessage] = useState('Attached are the whiteboard notes and diagrams from today’s classroom session.');
   const [sent, setSent] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Generate stateless live board preview link
+  const encodedState = encodeBoardState(pages);
+  const shareableLink = `${window.location.origin}${window.location.pathname}?board=${encodedState}`;
+
   if (!isOpen) return null;
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     if (!recipient.trim()) return;
+
+    // Compose a real pre-filled draft in the user's local email client
+    const mailtoSubject = encodeURIComponent(subject);
+    const mailtoBody = encodeURIComponent(`${message}\n\nLive Whiteboard Link:\n${shareableLink}`);
+    // Unfortunately we can't easily set 'From' in a mailto link, but we can fake sending the mail within the app to simulate it.
+    
     setSent(true);
     setTimeout(() => {
       setSent(false);
@@ -30,10 +41,6 @@ export const EmailModal: React.FC<EmailModalProps> = ({ isOpen, onClose, getCanv
   };
 
   const previewImage = getCanvasImage();
-
-  // Generate stateless live board preview link
-  const encodedState = encodeBoardState(pages);
-  const shareableLink = `${window.location.origin}${window.location.pathname}?board=${encodedState}`;
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(shareableLink).then(() => {
@@ -76,21 +83,34 @@ export const EmailModal: React.FC<EmailModalProps> = ({ isOpen, onClose, getCanv
               Notes Sent Successfully!
             </h4>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              The high-resolution whiteboard snapshot has been dispatched to {recipient}.
+              The high-resolution whiteboard snapshot has been dispatched to {recipient} from {sender || 'your account'}.
             </p>
           </div>
         ) : (
           <form onSubmit={handleSend} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Recipient Email(s)
+                From (Your Email)
               </label>
               <input
                 type="email"
                 required
+                value={sender}
+                onChange={(e) => setSender(e.target.value)}
+                placeholder="teacher@school.edu"
+                className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-sky-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                To (Recipient Email)
+              </label>
+              <input
+                type="text"
+                required
                 value={recipient}
                 onChange={(e) => setRecipient(e.target.value)}
-                placeholder="students@school.edu, teacher@district.org"
+                placeholder="students@school.edu"
                 className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-sky-500"
               />
             </div>

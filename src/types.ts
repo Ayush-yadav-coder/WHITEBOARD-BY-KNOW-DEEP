@@ -1,6 +1,7 @@
 export type ToolType =
   | 'select'
   | 'pen'
+  | 'pencil'
   | 'calligraphy'
   | 'highlighter'
   | 'shape-pen'
@@ -11,9 +12,24 @@ export type ToolType =
   | 'lasso'
   | 'sticky-note';
 
-export type ShapeType = 'rectangle' | 'circle' | 'triangle' | 'line' | 'arrow' | 'star' | 'hexagon' | 'pentagon' | 'heart' | 'diamond' | 'cube' | 'sphere' | 'pyramid' | 'cylinder' | 'cone' | 'prism' | 'torus' | 'text';
+export type ShapeType = 'rectangle' | 'circle' | 'triangle' | 'line' | 'arrow' | 'star' | 'hexagon' | 'pentagon' | 'heart' | 'diamond' | 'cube' | 'sphere' | 'pyramid' | 'cylinder' | 'cone' | 'prism' | 'torus' | 'text' | 'image' | 'flow-process' | 'flow-decision' | 'venn';
 
-export type WhiteboardBackground = 'white' | 'chalkboard' | 'black' | 'grid' | 'ruled' | 'beige' | 'mint' | 'yellow';
+export type WhiteboardBackground =
+  | 'white'
+  | 'chalkboard'
+  | 'black'
+  | 'midnight'
+  | 'graphite'
+  | 'grid'
+  | 'ruled'
+  | 'dots'
+  | 'beige'
+  | 'mint'
+  | 'yellow'
+  | 'skyblue'
+  | 'peach'
+  | 'lavender'
+  | 'rose';
 
 export type SplitZoneCount = 1 | 2 | 3 | 4;
 
@@ -25,7 +41,7 @@ export interface Point {
 
 export interface Stroke {
   id: string;
-  tool: 'pen' | 'highlighter' | 'eraser' | 'calligraphy' | 'text-pen';
+  tool: 'pen' | 'pencil' | 'highlighter' | 'eraser' | 'calligraphy' | 'text-pen';
   color: string;
   width: number;
   points: Point[];
@@ -48,6 +64,7 @@ export interface ShapeElement {
   text?: string;
   fontSize?: number;
   fontFamily?: string;
+  imageUrl?: string;
 }
 
 export interface CanvasNote {
@@ -81,6 +98,9 @@ export interface WhiteboardSettings {
   gridSize: number;
   autoRecognizeShapes: boolean;
   handwritingToText: boolean;
+  snapToGrid?: boolean;
+  toolbarSize?: 'normal' | 'large';
+  studentMode?: boolean;
 }
 
 export interface RulerState {
@@ -113,12 +133,12 @@ export interface DualPenConfig {
   penA: {
     color: string;
     width: number;
-    type: 'pen' | 'shape-pen' | 'text-pen' | 'highlighter';
+    type: 'pen' | 'pencil' | 'shape-pen' | 'text-pen' | 'highlighter';
   };
   penB: {
     color: string;
     width: number;
-    type: 'pen' | 'shape-pen' | 'text-pen' | 'highlighter';
+    type: 'pen' | 'pencil' | 'shape-pen' | 'text-pen' | 'highlighter';
   };
 }
 
@@ -143,4 +163,25 @@ export interface CircleToSearchPayload {
   imageBase64?: string;
   isMathEquation?: boolean;
   selectionBounds?: { minX: number; minY: number; maxX: number; maxY: number };
+}
+
+export interface OCRSearchMatch {
+  id: string;
+  text: string;
+  source: 'handwriting-ocr' | 'sticky-note' | 'shape-text' | 'formula';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  confidence: number;
+  context?: string;
+}
+
+export interface CameraFocusTarget {
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  highlightText?: string;
+  source?: string;
 }

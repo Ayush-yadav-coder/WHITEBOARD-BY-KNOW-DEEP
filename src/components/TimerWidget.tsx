@@ -169,78 +169,84 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({ isOpen, onClose }) => 
     setTimerSecondsLeft(seconds);
   };
 
+  const isCompact = (activeTab === 'timer' && isTimerRunning) || (activeTab === 'stopwatch' && isStopwatchRunning);
+
   return (
     <div
       id="smartwatch-timer-widget"
-      className="fixed z-40 w-72 bg-slate-900/95 text-white rounded-2xl shadow-2xl border border-slate-700/80 backdrop-blur-xl select-none overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+      className={`fixed z-40 bg-slate-900/95 text-white rounded-2xl shadow-2xl border border-slate-700/80 backdrop-blur-xl select-none overflow-hidden animate-in fade-in zoom-in-95 duration-200 transition-all ${isCompact ? 'w-auto' : 'w-[12.5vw] min-w-[200px] max-w-[260px]'}`}
       style={{ left: `${position.x}px`, top: `${position.y}px` }}
     >
       {/* Header / Drag Bar */}
-      <div
-        id="timer-drag-header"
-        className="flex items-center justify-between px-3.5 py-2.5 bg-slate-800/80 border-b border-slate-700 cursor-grab active:cursor-grabbing"
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-      >
-        <div className="flex items-center space-x-2 text-sky-400">
-          <Watch className="w-4 h-4 text-sky-400" />
-          <span className="text-xs font-semibold tracking-wide uppercase text-slate-200">
-            Classroom Clock
-          </span>
-        </div>
-        <button
-          id="timer-widget-close"
-          type="button"
-          onClick={onClose}
-          className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+      {!isCompact && (
+        <div
+          id="timer-drag-header"
+          className="flex items-center justify-between px-3.5 py-2.5 bg-slate-800/80 border-b border-slate-700 cursor-grab active:cursor-grabbing"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
         >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
+          <div className="flex items-center space-x-2 text-sky-400">
+            <Watch className="w-4 h-4 text-sky-400" />
+            <span className="text-xs font-semibold tracking-wide uppercase text-slate-200">
+              Classroom Clock
+            </span>
+          </div>
+          <button
+            id="timer-widget-close"
+            type="button"
+            onClick={onClose}
+            className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-800 bg-slate-900/50 p-1">
-        <button
-          id="tab-timer-btn"
-          type="button"
-          onClick={() => setActiveTab('timer')}
-          className={`flex-1 py-1.5 text-xs font-medium rounded-lg flex items-center justify-center space-x-1 transition-all ${
-            activeTab === 'timer'
-              ? 'bg-sky-500 text-white shadow-sm font-semibold'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-          }`}
-        >
-          <Clock className="w-3.5 h-3.5" />
-          <span>Timer</span>
-        </button>
-        <button
-          id="tab-stopwatch-btn"
-          type="button"
-          onClick={() => setActiveTab('stopwatch')}
-          className={`flex-1 py-1.5 text-xs font-medium rounded-lg flex items-center justify-center space-x-1 transition-all ${
-            activeTab === 'stopwatch'
-              ? 'bg-sky-500 text-white shadow-sm font-semibold'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-          }`}
-        >
-          <Flag className="w-3.5 h-3.5" />
-          <span>Stopwatch</span>
-        </button>
-        <button
-          id="tab-alarm-btn"
-          type="button"
-          onClick={() => setActiveTab('alarm')}
-          className={`flex-1 py-1.5 text-xs font-medium rounded-lg flex items-center justify-center space-x-1 transition-all ${
-            activeTab === 'alarm'
-              ? 'bg-sky-500 text-white shadow-sm font-semibold'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-          }`}
-        >
-          <Bell className="w-3.5 h-3.5" />
-          <span>Alarm</span>
-        </button>
-      </div>
+      {!isCompact && (
+        <div className="flex border-b border-slate-800 bg-slate-900/50 p-1">
+          <button
+            id="tab-timer-btn"
+            type="button"
+            onClick={() => setActiveTab('timer')}
+            className={`flex-1 py-1.5 text-xs font-medium rounded-lg flex items-center justify-center space-x-1 transition-all ${
+              activeTab === 'timer'
+                ? 'bg-sky-500 text-white shadow-sm font-semibold'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>Timer</span>
+          </button>
+          <button
+            id="tab-stopwatch-btn"
+            type="button"
+            onClick={() => setActiveTab('stopwatch')}
+            className={`flex-1 py-1.5 text-xs font-medium rounded-lg flex items-center justify-center space-x-1 transition-all ${
+              activeTab === 'stopwatch'
+                ? 'bg-sky-500 text-white shadow-sm font-semibold'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+            }`}
+          >
+            <Flag className="w-3.5 h-3.5" />
+            <span>Stopwatch</span>
+          </button>
+          <button
+            id="tab-alarm-btn"
+            type="button"
+            onClick={() => setActiveTab('alarm')}
+            className={`flex-1 py-1.5 text-xs font-medium rounded-lg flex items-center justify-center space-x-1 transition-all ${
+              activeTab === 'alarm'
+                ? 'bg-sky-500 text-white shadow-sm font-semibold'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+            }`}
+          >
+            <Bell className="w-3.5 h-3.5" />
+            <span>Alarm</span>
+          </button>
+        </div>
+      )}
 
       {/* Body Content */}
       <div className="p-4">
@@ -255,68 +261,79 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({ isOpen, onClose }) => 
             )}
 
             {/* Display */}
-            <div className="text-4xl font-mono font-bold tracking-tight text-white mb-2 py-2 px-4 rounded-xl bg-slate-950/70 border border-slate-800 shadow-inner">
+            <div 
+              className={`text-4xl font-mono font-bold tracking-tight text-white mb-2 py-2 px-4 rounded-xl bg-slate-950/70 border border-slate-800 shadow-inner ${isCompact ? 'cursor-grab active:cursor-grabbing text-center' : ''}`}
+              onPointerDown={isCompact ? handlePointerDown : undefined}
+              onPointerMove={isCompact ? handlePointerMove : undefined}
+              onPointerUp={isCompact ? handlePointerUp : undefined}
+            >
               {formatTimer(timerSecondsLeft)}
             </div>
 
             {/* Progress bar */}
-            <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mb-4">
-              <div
-                className={`h-full transition-all duration-500 ${
-                  timerSecondsLeft <= 10 ? 'bg-rose-500' : 'bg-sky-400'
-                }`}
-                style={{
-                  width: `${timerTotalDuration > 0 ? (timerSecondsLeft / timerTotalDuration) * 100 : 0}%`,
-                }}
-              />
-            </div>
+            {!isCompact && (
+              <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mb-4">
+                <div
+                  className={`h-full transition-all duration-500 ${
+                    timerSecondsLeft <= 10 ? 'bg-rose-500' : 'bg-sky-400'
+                  }`}
+                  style={{
+                    width: `${timerTotalDuration > 0 ? (timerSecondsLeft / timerTotalDuration) * 100 : 0}%`,
+                  }}
+                />
+              </div>
+            )}
 
             {/* Presets */}
-            <div className="grid grid-cols-4 gap-1.5 w-full mb-3">
-              {[60, 180, 300, 600].map((sec) => (
-                <button
-                  key={sec}
-                  type="button"
-                  onClick={() => setPreset(sec)}
-                  className={`py-1 text-[11px] font-medium rounded-md border transition-all ${
-                    timerTotalDuration === sec && !isTimerRunning
-                      ? 'bg-sky-500/20 text-sky-300 border-sky-500/40 font-semibold'
-                      : 'bg-slate-800/70 text-slate-300 border-slate-700/60 hover:bg-slate-700'
-                  }`}
-                >
-                  {sec / 60}m
-                </button>
-              ))}
-            </div>
+            {!isCompact && (
+              <div className="grid grid-cols-4 gap-1.5 w-full mb-3">
+                {[60, 180, 300, 600].map((sec) => (
+                  <button
+                    key={sec}
+                    type="button"
+                    onClick={() => setPreset(sec)}
+                    className={`py-1 text-[11px] font-medium rounded-md border transition-all ${
+                      timerTotalDuration === sec && !isTimerRunning
+                        ? 'bg-sky-500/20 text-sky-300 border-sky-500/40 font-semibold'
+                        : 'bg-slate-800/70 text-slate-300 border-slate-700/60 hover:bg-slate-700'
+                    }`}
+                  >
+                    {sec / 60}m
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Manual Adjust & Controls */}
-            <div className="flex items-center space-x-2 mb-3">
-              <button
-                type="button"
-                onClick={() => {
-                  const n = Math.max(10, timerSecondsLeft - 30);
-                  setTimerSecondsLeft(n);
-                  setTimerTotalDuration(n);
-                }}
-                className="p-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
-                title="-30s"
-              >
-                <Minus className="w-3.5 h-3.5" />
-              </button>
-              <span className="text-[11px] text-slate-400">+/- 30s</span>
-              <button
-                type="button"
-                onClick={() => {
-                  const n = timerSecondsLeft + 30;
-                  setTimerSecondsLeft(n);
-                  setTimerTotalDuration(n);
-                }}
-                className="p-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
-                title="+30s"
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
-            </div>
+            {!isCompact && (
+              <div className="flex items-center space-x-2 mb-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const n = Math.max(10, timerSecondsLeft - 30);
+                    setTimerSecondsLeft(n);
+                    setTimerTotalDuration(n);
+                  }}
+                  className="p-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                  title="-30s"
+                >
+                  <Minus className="w-3.5 h-3.5" />
+                </button>
+                <span className="text-[11px] text-slate-400">+/- 30s</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const n = timerSecondsLeft + 30;
+                    setTimerSecondsLeft(n);
+                    setTimerTotalDuration(n);
+                  }}
+                  className="p-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                  title="+30s"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
 
             {/* Action buttons */}
             <div className="flex items-center space-x-3 w-full">
@@ -345,19 +362,21 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({ isOpen, onClose }) => 
                   </>
                 )}
               </button>
-              <button
-                id="timer-reset-btn"
-                type="button"
-                onClick={() => {
-                  setIsTimerRunning(false);
-                  setIsAlarmSounding(false);
-                  setTimerSecondsLeft(timerTotalDuration);
-                }}
-                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors border border-slate-700"
-                title="Reset timer"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </button>
+              {!isCompact && (
+                <button
+                  id="timer-reset-btn"
+                  type="button"
+                  onClick={() => {
+                    setIsTimerRunning(false);
+                    setIsAlarmSounding(false);
+                    setTimerSecondsLeft(timerTotalDuration);
+                  }}
+                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors border border-slate-700"
+                  title="Reset timer"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -366,7 +385,12 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({ isOpen, onClose }) => 
         {activeTab === 'stopwatch' && (
           <div className="flex flex-col items-center">
             {/* Display */}
-            <div className="text-3xl font-mono font-bold tracking-tight text-white mb-3 py-2 px-3 rounded-xl bg-slate-950/70 border border-slate-800 shadow-inner">
+            <div 
+              className={`text-3xl font-mono font-bold tracking-tight text-white mb-3 py-2 px-3 rounded-xl bg-slate-950/70 border border-slate-800 shadow-inner ${isCompact ? 'cursor-grab active:cursor-grabbing text-center' : ''}`}
+              onPointerDown={isCompact ? handlePointerDown : undefined}
+              onPointerMove={isCompact ? handlePointerMove : undefined}
+              onPointerUp={isCompact ? handlePointerUp : undefined}
+            >
               {formatStopwatch(stopwatchTime)}
             </div>
 
@@ -385,7 +409,7 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({ isOpen, onClose }) => 
                 {isStopwatchRunning ? (
                   <>
                     <Pause className="w-3.5 h-3.5" />
-                    <span>Pause</span>
+                    <span>Stop</span>
                   </>
                 ) : (
                   <>
@@ -405,19 +429,21 @@ export const TimerWidget: React.FC<TimerWidgetProps> = ({ isOpen, onClose }) => 
                 Lap
               </button>
 
-              <button
-                id="stopwatch-reset-btn"
-                type="button"
-                onClick={() => {
-                  setIsStopwatchRunning(false);
-                  setStopwatchTime(0);
-                  setLaps([]);
-                }}
-                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
-                title="Reset stopwatch"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </button>
+              {!isCompact && (
+                <button
+                  id="stopwatch-reset-btn"
+                  type="button"
+                  onClick={() => {
+                    setIsStopwatchRunning(false);
+                    setStopwatchTime(0);
+                    setLaps([]);
+                  }}
+                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+                  title="Reset stopwatch"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+              )}
             </div>
 
             {/* Laps view */}

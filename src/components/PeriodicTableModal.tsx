@@ -15,6 +15,7 @@ interface PeriodicTableModalProps {
   isOpen: boolean;
   onClose: () => void;
   onStampElement: (element: ElementData) => void;
+  onStampFullTableImage?: () => void;
 }
 
 // Key curated classroom elements across main groups
@@ -66,6 +67,7 @@ export const PeriodicTableModal: React.FC<PeriodicTableModalProps> = ({
   isOpen,
   onClose,
   onStampElement,
+  onStampFullTableImage,
 }) => {
   const [search, setSearch] = useState('');
   const [selectedElement, setSelectedElement] = useState<ElementData>(SAMPLE_ELEMENTS[0]);
@@ -101,17 +103,32 @@ export const PeriodicTableModal: React.FC<PeriodicTableModalProps> = ({
                 Interactive Periodic Table
               </h2>
               <p className="text-[11px] text-slate-400">
-                Samsung WAF Educational Science Tool • Select and stamp element cards to the whiteboard
+                Samsung WAF Educational Science Tool • Select and stamp element cards or full table image
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center space-x-2">
+            {onStampFullTableImage && (
+              <button
+                type="button"
+                onClick={() => {
+                  onStampFullTableImage();
+                  onClose();
+                }}
+                className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl border border-cyan-400/50 shadow-md transition-all flex items-center space-x-1.5"
+                title="Stamp Full High-Res Periodic Table Image to Whiteboard"
+              >
+                <span>Stamp Full Table Image</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Search Bar */}

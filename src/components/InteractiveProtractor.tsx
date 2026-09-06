@@ -130,8 +130,8 @@ export const InteractiveProtractor: React.FC<InteractiveProtractorProps> = ({
         >
           <defs>
             <linearGradient id="protractorGlass" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.3" />
-              <stop offset="100%" stop-color="#bae6fd" stop-opacity="0.45" />
+              <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.3" />
+              <stop offset="100%" stopColor="#bae6fd" stopOpacity="0.45" />
             </linearGradient>
           </defs>
 
