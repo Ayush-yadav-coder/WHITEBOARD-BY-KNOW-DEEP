@@ -27,10 +27,12 @@ import { SpotlightCurtainWidget } from './components/SpotlightCurtainWidget';
 import { PeriodicTableModal } from './components/PeriodicTableModal';
 import { ClassroomPickerModal } from './components/ClassroomPickerModal';
 import { PageThumbnailDrawer } from './components/PageThumbnailDrawer';
-import { QRCodeModal } from './components/QRCodeModal';
+import { ShareLinkModal } from './components/ShareLinkModal';
+import { GeminiApiKeyModal } from './components/GeminiApiKeyModal';
 import { EmailModal } from './components/EmailModal';
 import { SaveAsModal } from './components/SaveAsModal';
 import { Maximize, Minimize } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { decodeBoardState } from './utils/shareableLink';
 
 export default function App() {
@@ -67,6 +69,7 @@ export default function App() {
 
   // Fullscreen mode state
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isConvertingText, setIsConvertingText] = useState(false);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -140,7 +143,8 @@ export default function App() {
   const [isBrowserOpen, setIsBrowserOpen] = useState(false);
   const [isTimerOpen, setIsTimerOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isQRCodeOpen, setIsQRCodeOpen] = useState(false);
+  const [isShareLinkOpen, setIsShareLinkOpen] = useState(false);
+  const [isGeminiKeyOpen, setIsGeminiKeyOpen] = useState(false);
   const [isEmailOpen, setIsEmailOpen] = useState(false);
   const [isSaveAsOpen, setIsSaveAsOpen] = useState(false);
   const [isPeriodicTableOpen, setIsPeriodicTableOpen] = useState(false);
@@ -333,6 +337,7 @@ export default function App() {
         const base64Image = tempCanvas.toDataURL('image/png');
 
         try {
+          setIsConvertingText(true);
           // Send to server-side Gemini OCR endpoint
           const res = await fetch('/api/convert-text', {
             method: 'POST',
@@ -345,35 +350,39 @@ export default function App() {
 
           const textStrokeIds = textStrokes.map((st) => st.id);
 
-          const newNote: CanvasNote = {
-            id: `text-note-${Date.now()}`,
+          const newTextShape: ShapeElement = {
+            id: `text-shape-${Date.now()}`,
+            type: 'text',
             x: Math.max(40, minX - 20),
             y: Math.max(40, minY - 20),
-            title: 'Ink-to-Text Card',
+            width: Math.max(250, maxX - minX + 40),
+            height: Math.max(100, maxY - minY + 40),
             text: recognizedText,
-            color: 'blue',
+            color: currentPenConfig.color,
+            strokeWidth: 2,
             fontSize: 24,
             fontFamily: 'sans',
-            timestamp: Date.now(),
           };
 
           // Save current state into undo history
           pushToHistory(page);
 
-          // Update state: Filter out converted strokes and append the new editable note element
+          // Update state: Filter out converted strokes and append the new editable text element
           setPages((prevPages) =>
             prevPages.map((p, idx) =>
               idx === freshIndex
                 ? {
                     ...p,
                     strokes: p.strokes.filter((s) => !textStrokeIds.includes(s.id)),
-                    notes: [...p.notes, newNote],
+                    shapes: [...p.shapes, newTextShape],
                   }
                 : p
             )
           );
         } catch (error) {
           console.error('Error during ink-to-text OCR conversion:', error);
+        } finally {
+          setIsConvertingText(false);
         }
       }, 3000);
     }
@@ -579,6 +588,19 @@ export default function App() {
     );
   };
 
+  const handleUpdateShape = (shapeId: string, updates: Partial<ShapeElement>) => {
+    setPages((prevPages) =>
+      prevPages.map((page, idx) =>
+        idx === currentPageIndex
+          ? {
+              ...page,
+              shapes: page.shapes.map((sh) => (sh.id === shapeId ? { ...sh, ...updates } : sh)),
+            }
+          : page
+      )
+    );
+  };
+
   const handleDeleteNote = (noteId: string) => {
     setPages((prevPages) =>
       prevPages.map((page, idx) =>
@@ -698,6 +720,28 @@ export default function App() {
             return {
               ...sh,
               rotation,
+            };
+          }
+          return sh;
+        });
+        return {
+          ...page,
+          shapes: updatedShapes,
+        };
+      })
+    );
+  };
+
+  const handleResizeSelected = (shapeId: string, width: number, height: number) => {
+    setPages((prevPages) =>
+      prevPages.map((page, idx) => {
+        if (idx !== currentPageIndex) return page;
+        const updatedShapes = page.shapes.map((sh) => {
+          if (sh.id === shapeId) {
+            return {
+              ...sh,
+              width,
+              height,
             };
           }
           return sh;
@@ -890,23 +934,14 @@ export default function App() {
     >
       {/* BRANDING LOGO & FULLSCREEN TOGGLE (TOP LEFT) */}
       <div className="absolute top-4 left-4 z-20 pointer-events-auto flex items-center space-x-3 select-none">
-        {/* Animated Inline Logo Wrapper */}
-        <div className="animate-logo-appear shrink-0">
-          <svg viewBox="0 0 100 100" className={`w-12 h-12 shadow-md rounded-2xl border transition-all duration-300 ${isDarkBg ? 'border-white/30 bg-[#a0d2f3]' : 'border-slate-200 bg-[#a0d2f3]'}`}>
-            {/* Rounded square light blue background */}
+        {/* Our Whiteboard Logo (Replacing three-line menu) */}
+        <div className="animate-logo-appear shrink-0 group cursor-pointer" onClick={() => window.location.reload()}>
+          <svg viewBox="0 0 100 100" className={`w-12 h-12 shadow-md rounded-2xl border transition-all duration-300 group-hover:scale-105 group-active:scale-95 ${isDarkBg ? 'border-white/30 bg-[#a0d2f3]' : 'border-slate-200 bg-[#a0d2f3]'}`}>
             <rect x="2" y="2" width="96" height="96" rx="20" fill="#a0d2f3" />
-            
-            {/* Stylus Pen */}
-            {/* Pencil body */}
             <path d="M 24 28 L 30 28 L 30 84 L 24 84 Z" fill="#ffffff" />
-            {/* Pencil tip cone */}
             <path d="M 24 28 L 27 16 L 30 28 Z" fill="#ffffff" />
-            {/* Pencil tip dark point / lead */}
             <path d="M 26.5 18 L 27 16 L 27.5 18 Z" fill={isDarkBg ? "#ffffff" : "#4b5563"} />
-            {/* Pill button on pencil */}
             <rect x="25.5" y="44" width="3.5" height="16" rx="1.5" fill={isDarkBg ? "#ffffff" : "#1e293b"} />
-            
-            {/* Wavy strokes */}
             <path d="M 44 32 Q 50 18 55 27 T 68 26 T 82 25" fill="none" stroke={isDarkBg ? "#ffffff" : "#1e293b"} strokeWidth="5.5" strokeLinecap="round" />
             <path d="M 44 50 Q 50 36 55 45 T 68 44 T 82 43" fill="none" stroke={isDarkBg ? "#ffffff" : "#1e293b"} strokeWidth="5.5" strokeLinecap="round" />
           </svg>
@@ -964,6 +999,8 @@ export default function App() {
         onDeleteSelected={handleDeleteSelected}
         onMoveSelected={handleMoveSelected}
         onRotateSelected={handleRotateSelected}
+        onResizeSelected={handleResizeSelected}
+        onUpdateShape={handleUpdateShape}
         onUpdateEraserSize={setEraserSize}
       />
 
@@ -1025,6 +1062,21 @@ export default function App() {
         onRedo={handleRedo}
       />
 
+      {/* AI Conversion Toast */}
+      <AnimatePresence>
+        {isConvertingText && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-32 left-1/2 -translate-x-1/2 z-50 bg-indigo-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3"
+          >
+            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            <span className="font-medium tracking-wide">Refining handwriting with AI...</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* 2. DUAL-SIDE ACCESSIBILITY & THREE-LINE MENU DRAWER */}
       <SideDrawer
         isOpen={isDrawerOpen}
@@ -1042,9 +1094,9 @@ export default function App() {
         onQuickSave={handleQuickSave}
         onOpenSaveAs={() => setIsSaveAsOpen(true)}
         onUploadImage={handleUploadImage}
-        onOpenQRCode={() => setIsQRCodeOpen(true)}
+        onOpenQRCode={() => setIsShareLinkOpen(true)}
         onOpenEmail={() => setIsEmailOpen(true)}
-        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSettings={() => setIsGeminiKeyOpen(true)}
         onExit={handleExit}
         onChangeSplitZones={setSplitZones}
         onAddPage={handleAddPage}
@@ -1143,10 +1195,16 @@ export default function App() {
         onClose={() => setIsSettingsOpen(false)}
       />
 
-      {/* QR CODE STUDENT SCREEN SHARE MODAL */}
-      <QRCodeModal
-        isOpen={isQRCodeOpen}
-        onClose={() => setIsQRCodeOpen(false)}
+      {/* GEMINI API KEY CONFIGURATION MODAL */}
+      <GeminiApiKeyModal
+        isOpen={isGeminiKeyOpen}
+        onClose={() => setIsGeminiKeyOpen(false)}
+      />
+
+      {/* SHARE LINK STUDENT SCREEN SHARE MODAL */}
+      <ShareLinkModal
+        isOpen={isShareLinkOpen}
+        onClose={() => setIsShareLinkOpen(false)}
       />
 
       {/* EMAIL BOARD SUMMARY MODAL */}

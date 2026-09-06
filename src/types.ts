@@ -11,7 +11,7 @@ export type ToolType =
   | 'lasso'
   | 'sticky-note';
 
-export type ShapeType = 'rectangle' | 'circle' | 'triangle' | 'line' | 'arrow' | 'star' | 'cube' | 'sphere' | 'pyramid' | 'cylinder' | 'cone';
+export type ShapeType = 'rectangle' | 'circle' | 'triangle' | 'line' | 'arrow' | 'star' | 'hexagon' | 'pentagon' | 'heart' | 'diamond' | 'cube' | 'sphere' | 'pyramid' | 'cylinder' | 'cone' | 'prism' | 'torus' | 'text';
 
 export type WhiteboardBackground = 'white' | 'chalkboard' | 'black' | 'grid' | 'ruled' | 'beige' | 'mint' | 'yellow';
 
@@ -45,6 +45,9 @@ export interface ShapeElement {
   fill?: string;
   zoneId?: number;
   rotation?: number; // rotation angle in degrees
+  text?: string;
+  fontSize?: number;
+  fontFamily?: string;
 }
 
 export interface CanvasNote {

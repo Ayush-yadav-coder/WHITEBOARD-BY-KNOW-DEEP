@@ -33,6 +33,8 @@ import {
   Hand,
   Navigation,
   BrainCircuit,
+  BoxSelect,
+  Box,
 } from 'lucide-react';
 import {
   ToolType,
@@ -186,17 +188,30 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
           className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-white/95 dark:bg-slate-900/95 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl p-4 backdrop-blur-xl flex flex-col space-y-3.5 w-72 animate-in fade-in zoom-in-95 duration-150 text-slate-900 dark:text-white"
         >
           {/* Dual Pen Switcher */}
-          <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Samsung Wacom Pen
-            </span>
+          <div className="flex items-center space-x-2 pb-2 border-b border-slate-100 dark:border-slate-800">
             <button
               type="button"
-              onClick={onToggleDualPen}
-              className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 flex items-center space-x-1"
+              onClick={() => { if(dualPen.activePen !== 'penA') onToggleDualPen(); }}
+              className={`flex-1 py-2 px-3 rounded-xl border flex flex-col items-center transition-all ${
+                dualPen.activePen === 'penA'
+                  ? 'bg-sky-500 text-white border-sky-600 shadow-sm'
+                  : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+              }`}
             >
-              <Layers className="w-3 h-3" />
-              <span>Switch to {dualPen.activePen === 'penA' ? 'Pen B' : 'Pen A'}</span>
+              <span className="text-[10px] font-black uppercase tracking-tighter">Pen A</span>
+              <span className="text-[8px] opacity-70">(Front Area)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { if(dualPen.activePen !== 'penB') onToggleDualPen(); }}
+              className={`flex-1 py-2 px-3 rounded-xl border flex flex-col items-center transition-all ${
+                dualPen.activePen === 'penB'
+                  ? 'bg-sky-500 text-white border-sky-600 shadow-sm'
+                  : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+              }`}
+            >
+              <span className="text-[10px] font-black uppercase tracking-tighter">Pen B</span>
+              <span className="text-[8px] opacity-70">(Thick Area)</span>
             </button>
           </div>
 
@@ -225,45 +240,9 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
           {/* Pen Sub-Modes / Wacom Modes */}
           <div>
             <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">
-              Wacom Ink Modes
+              Tools & AI Refinement
             </span>
             <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  onSelectPenMode('pen');
-                  onSelectTool('pen');
-                  onChangePenWidth(4);
-                }}
-                className={`p-2 rounded-xl border flex items-center space-x-2 transition-all ${
-                  activeTool === 'pen' && penWidth <= 6
-                    ? 'bg-sky-500 text-white border-sky-500 font-bold shadow-sm'
-                    : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
-                }`}
-                title="Thin Mode (4px)"
-              >
-                <div className="w-2 h-2 rounded-full bg-current" />
-                <span className="text-[11px]">Thin Mode</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  onSelectPenMode('pen');
-                  onSelectTool('pen');
-                  onChangePenWidth(12);
-                }}
-                className={`p-2 rounded-xl border flex items-center space-x-2 transition-all ${
-                  activeTool === 'pen' && penWidth > 6
-                    ? 'bg-sky-500 text-white border-sky-500 font-bold shadow-sm'
-                    : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
-                }`}
-                title="Thick Mode (12px)"
-              >
-                <div className="w-3.5 h-3.5 rounded-full bg-current" />
-                <span className="text-[11px]">Thick Mode</span>
-              </button>
-
               <button
                 type="button"
                 onClick={() => {
@@ -278,7 +257,7 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
                 }`}
                 title="Calligraphy: Velocity and pressure based stroke thickness variation"
               >
-                <PenTool className="w-4 h-4 text-orange-400 animate-pulse" />
+                <PenTool className="w-4 h-4 text-orange-400" />
                 <span className="text-[11px]">Calligraphy</span>
               </button>
 
@@ -313,7 +292,7 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
                 title="Text Pen: Converts handwriting to typed text cards"
               >
                 <Type className="w-4 h-4 text-emerald-400" />
-                <span className="text-[11px]">Text Pen</span>
+                <span className="text-[11px]">Text Pen (AI)</span>
               </button>
 
               <button
@@ -341,74 +320,82 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
       {showEraserMenu && (
         <div
           id="eraser-options-popover"
-          className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-white/95 dark:bg-slate-900/95 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl p-4 backdrop-blur-xl flex flex-col space-y-3 w-64 animate-in fade-in zoom-in-95 duration-150 text-slate-900 dark:text-white"
+          className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-white/95 dark:bg-slate-900/95 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl p-4 backdrop-blur-xl flex flex-col space-y-4 w-80 animate-in fade-in zoom-in-95 duration-150 text-slate-900 dark:text-white"
         >
           <div className="flex items-center justify-between pb-1.5 border-b border-slate-100 dark:border-slate-800">
             <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Eraser Modes
+              Smart Eraser Controls
             </span>
           </div>
 
-          <div className="flex flex-col space-y-2">
-            {/* Custom Mode */}
+          <div className="grid grid-cols-2 gap-3">
+            {/* Custom Mode (Left) */}
             <button
               type="button"
               onClick={() => {
                 onChangeEraserSize(32);
                 if (onChangeEraserMode) onChangeEraserMode('custom');
               }}
-              className={`p-2.5 rounded-xl border flex items-center space-x-2.5 transition-all text-left ${
+              className={`p-3 rounded-2xl border flex flex-col items-center justify-center space-y-1.5 transition-all text-center ${
                 eraserSize !== 120 && (eraserMode === 'custom' || !eraserMode)
-                  ? 'bg-sky-500 text-white border-sky-500 font-semibold'
+                  ? 'bg-sky-500 text-white border-sky-600 shadow-sm font-bold scale-105'
                   : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
               }`}
             >
-              <Scissors className="w-4 h-4 text-cyan-500" />
-              <div>
-                <span className="text-xs font-bold block">1. Custom Mode</span>
-                <span className="text-[9px] opacity-80">Encircle drawing area to erase</span>
-              </div>
+              <Scissors className="w-5 h-5 text-cyan-500" />
+              <span className="text-[10px] uppercase font-black">Custom</span>
             </button>
 
-            {/* Clear Entire Page */}
-            <button
-              id="clear-canvas-btn"
-              type="button"
-              onClick={() => {
-                if (window.confirm('Clear all strokes and whiteboard objects from this page?')) {
-                  onClearCanvas();
-                  setShowEraserMenu(false);
-                }
-              }}
-              className="p-2.5 rounded-xl border flex items-center space-x-2.5 bg-slate-50 dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-slate-700 dark:text-slate-300 hover:text-rose-600 dark:hover:text-rose-400 border-slate-200 dark:border-slate-700 hover:border-rose-300 transition-colors text-left"
-            >
-              <Trash2 className="w-4 h-4 text-rose-500" />
-              <div>
-                <span className="text-xs font-bold block">2. Clear Entire Page</span>
-                <span className="text-[9px] opacity-80">Swipe/click to reset current page</span>
+            {/* Swipe to Clear Slider (Right) */}
+            <div className="relative p-3 rounded-2xl border bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center group overflow-hidden">
+              <div className="absolute inset-0 bg-rose-500/0 group-hover:bg-rose-500/5 transition-colors pointer-events-none" />
+              <div className="relative w-full h-8 bg-slate-200 dark:bg-slate-700 rounded-full flex items-center p-1 cursor-pointer">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  defaultValue="0"
+                  onChange={(e) => {
+                    if (e.target.value === '100') {
+                      if (window.confirm('Clear entire page?')) {
+                        onClearCanvas();
+                      }
+                      e.target.value = '0';
+                    }
+                  }}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                />
+                <div 
+                  className="w-6 h-6 bg-white dark:bg-slate-200 rounded-full shadow-md flex items-center justify-center text-rose-500 pointer-events-none"
+                  style={{ marginLeft: '0%' }}
+                >
+                  <Eraser className="w-3.5 h-3.5" />
+                </div>
+                <span className="ml-8 text-[9px] font-black text-slate-400 dark:text-slate-500 pointer-events-none uppercase tracking-tighter">Swipe to Clear</span>
               </div>
-            </button>
-
-            {/* Palm Width */}
-            <button
-              type="button"
-              onClick={() => {
-                onChangeEraserSize(120);
-                if (onChangeEraserMode) onChangeEraserMode('palm');
-              }}
-              className={`p-2.5 rounded-xl border flex items-center space-x-2.5 transition-all text-left ${
-                eraserSize === 120 || eraserMode === 'palm'
-                  ? 'bg-sky-500 text-white border-sky-500 font-semibold'
-                  : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <Layers className="w-4 h-4 text-emerald-500" />
-              <div>
-                <span className="text-xs font-bold block">3. Palm Width</span>
-                <span className="text-[9px] opacity-80">Broad swipe touch surface erase</span>
-              </div>
-            </button>
+              <span className="text-[10px] mt-1.5 uppercase font-black text-slate-500 dark:text-slate-400">Clear Page</span>
+            </div>
           </div>
+
+          {/* Palm Width (Below) */}
+          <button
+            type="button"
+            onClick={() => {
+              onChangeEraserSize(120);
+              if (onChangeEraserMode) onChangeEraserMode('palm');
+            }}
+            className={`p-3 rounded-2xl border flex items-center justify-center space-x-3 transition-all ${
+              eraserSize === 120 || eraserMode === 'palm'
+                ? 'bg-sky-500 text-white border-sky-600 shadow-sm font-bold'
+                : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+            }`}
+          >
+            <Hand className="w-5 h-5 text-emerald-500" />
+            <div className="text-left">
+              <span className="text-xs font-black block uppercase tracking-tight">Palm Width Erase</span>
+              <span className="text-[9px] opacity-70">Professional Broad Surface Erasing</span>
+            </div>
+          </button>
         </div>
       )}
 
@@ -422,14 +409,18 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
             2D Geometry Shapes
           </span>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             {[
-              { id: 'rectangle' as ShapeType, label: 'Rectangle', icon: Square },
-              { id: 'circle' as ShapeType, label: 'Circle', icon: Circle },
-              { id: 'triangle' as ShapeType, label: 'Triangle', icon: Triangle },
+              { id: 'rectangle' as ShapeType, label: 'Rect', icon: Square },
+              { id: 'circle' as ShapeType, label: 'Circ', icon: Circle },
+              { id: 'triangle' as ShapeType, label: 'Tri', icon: Triangle },
               { id: 'line' as ShapeType, label: 'Line', icon: Minus },
               { id: 'arrow' as ShapeType, label: 'Arrow', icon: ArrowUpRight },
               { id: 'star' as ShapeType, label: 'Star', icon: Star },
+              { id: 'hexagon' as ShapeType, label: 'Hex', icon: Shapes },
+              { id: 'pentagon' as ShapeType, label: 'Pent', icon: Shapes },
+              { id: 'heart' as ShapeType, label: 'Heart', icon: Star },
+              { id: 'diamond' as ShapeType, label: 'Diam', icon: Square },
             ].map((shape) => {
               const Icon = shape.icon;
               return (
@@ -441,14 +432,14 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
                     onSelectTool('shape');
                     setShowGeometryMenu(false);
                   }}
-                  className={`p-2.5 rounded-xl border flex flex-col items-center space-y-1 transition-all ${
+                  className={`p-2 rounded-xl border flex flex-col items-center space-y-1 transition-all ${
                     activeTool === 'shape' && selectedShape === shape.id
-                      ? 'bg-sky-500 text-white border-sky-500 font-semibold'
+                      ? 'bg-sky-500 text-white border-sky-500 font-semibold shadow-sm'
                       : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
                   }`}
                 >
-                  <Icon className="w-4 h-4" />
-                  <span className="text-[10px]">{shape.label}</span>
+                  <Icon className="w-3.5 h-3.5" />
+                  <span className="text-[8px] font-black uppercase tracking-tighter">{shape.label}</span>
                 </button>
               );
             })}
@@ -458,13 +449,15 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
             3D Geometry Shapes
           </span>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             {[
               { id: 'cube' as ShapeType, label: 'Cube', icon: Square },
-              { id: 'sphere' as ShapeType, label: 'Sphere', icon: Circle },
-              { id: 'pyramid' as ShapeType, label: 'Pyramid', icon: Triangle },
-              { id: 'cylinder' as ShapeType, label: 'Cylinder', icon: Layers },
+              { id: 'sphere' as ShapeType, label: 'Sph', icon: Circle },
+              { id: 'pyramid' as ShapeType, label: 'Pyr', icon: Triangle },
+              { id: 'cylinder' as ShapeType, label: 'Cyl', icon: Layers },
               { id: 'cone' as ShapeType, label: 'Cone', icon: Compass },
+              { id: 'prism' as ShapeType, label: 'Prism', icon: BoxSelect },
+              { id: 'torus' as ShapeType, label: 'Torus', icon: Circle },
             ].map((shape) => {
               const Icon = shape.icon;
               return (
@@ -476,14 +469,14 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
                     onSelectTool('shape');
                     setShowGeometryMenu(false);
                   }}
-                  className={`p-2.5 rounded-xl border flex flex-col items-center space-y-1 transition-all ${
+                  className={`p-2 rounded-xl border flex flex-col items-center space-y-1 transition-all ${
                     activeTool === 'shape' && selectedShape === shape.id
-                      ? 'bg-sky-500 text-white border-sky-500 font-semibold'
+                      ? 'bg-sky-500 text-white border-sky-500 font-semibold shadow-sm'
                       : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
                   }`}
                 >
-                  <Icon className="w-4 h-4 text-cyan-500 dark:text-cyan-400" />
-                  <span className="text-[10px]">{shape.label}</span>
+                  <Icon className="w-3.5 h-3.5 text-cyan-500 dark:text-cyan-400" />
+                  <span className="text-[8px] font-black uppercase tracking-tighter">{shape.label}</span>
                 </button>
               );
             })}

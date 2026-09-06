@@ -47,6 +47,8 @@ interface WhiteboardCanvasProps {
   onDuplicateSelected?: (strokeIds: string[], shapeIds: string[]) => void;
   onMoveSelected?: (strokeIds: string[], shapeIds: string[], dx: number, dy: number) => void;
   onRotateSelected?: (shapeId: string, rotation: number) => void;
+  onResizeSelected?: (shapeId: string, width: number, height: number) => void;
+  onUpdateShape?: (shapeId: string, updates: Partial<ShapeElement>) => void;
   onUpdateEraserSize?: (size: number) => void;
 }
 
@@ -81,6 +83,8 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
   onDuplicateSelected,
   onMoveSelected,
   onRotateSelected,
+  onResizeSelected,
+  onUpdateShape,
   onUpdateEraserSize,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -88,6 +92,7 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
 
   // Rotation dragging state
   const isRotatingSelectionRef = useRef(false);
+  const isResizingSelectionRef = useRef(false);
   const rotationStartAngleRef = useRef(0);
   const rotationInitialShapeAngleRef = useRef(0);
   const dragSelectionRotationRef = useRef(0);
@@ -105,6 +110,8 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
 
   // Multi-touch active pointer storage (up to 20 touch points)
   const activePointersRef = useRef<Map<number, Point[]>>(new Map());
+  const smoothedPointersRef = useRef<Map<number, Point>>(new Map());
+  const SMOOTHING_FACTOR = 0.25; // Lower is smoother but has more latency
 
   // Current interactive shape preview on drag
   const [activeShapePreview, setActiveShapePreview] = useState<{
@@ -321,6 +328,19 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
         ctx.beginPath();
         ctx.arc(handleX, handleY, 2.5, 0, Math.PI * 2);
         ctx.fill();
+
+        // Draw Resize Handle (Bottom-Right)
+        ctx.restore();
+        ctx.save();
+        ctx.strokeStyle = '#06b6d4';
+        ctx.fillStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        const resizeX = x1 + w;
+        const resizeY = y1 + h;
+        ctx.beginPath();
+        ctx.arc(resizeX, resizeY, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
       }
       ctx.restore();
     }
@@ -432,6 +452,17 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
           rotationInitialShapeAngleRef.current = singleSelectedShape.rotation || 0;
           return;
         }
+
+        // Check resize handle (Bottom-Right)
+        const h = selectionBounds.maxY - selectionBounds.minY + pad * 2;
+        const resizeX = x1 + w;
+        const resizeY = y1 + h;
+        const distResize = Math.sqrt((clickX - resizeX) ** 2 + (clickY - resizeY) ** 2);
+        if (distResize <= 15) {
+          isResizingSelectionRef.current = true;
+          dragSelectionStartRef.current = { x: clickX, y: clickY };
+          return;
+        }
       }
 
       const clickInsideSelection = selectionBounds &&
@@ -470,6 +501,7 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
     };
 
     activePointersRef.current.set(e.pointerId, [initialPoint]);
+    smoothedPointersRef.current.set(e.pointerId, initialPoint);
     renderCanvas();
   };
 
@@ -543,6 +575,24 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
       return;
     }
 
+    // Selection Resizing
+    if (isResizingSelectionRef.current && selectionBounds && selectedShapeIds.length === 1) {
+      const clickX = x - (panOffset.x + pageSlideOffset);
+      const clickY = y - panOffset.y;
+      const shapeId = selectedShapeIds[0];
+      const shape = shapes.find(s => s.id === shapeId);
+      if (shape && onResizeSelected) {
+        const dx = clickX - dragSelectionStartRef.current.x;
+        const dy = clickY - dragSelectionStartRef.current.y;
+        const newWidth = Math.max(20, shape.width + dx);
+        const newHeight = Math.max(20, shape.height + dy);
+        onResizeSelected(shapeId, newWidth, newHeight);
+        dragSelectionStartRef.current = { x: clickX, y: clickY };
+      }
+      renderCanvas();
+      return;
+    }
+
     // Selection Dragging
     if (isDraggingSelectionRef.current) {
       const clickX = x - (panOffset.x + pageSlideOffset);
@@ -565,11 +615,23 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
       const currentOffsetX = panOffset.x + pageSlideOffset;
       const currentOffsetY = panOffset.y;
       const pts = activePointersRef.current.get(e.pointerId)!;
-      pts.push({
-        x: x - currentOffsetX,
-        y: y - currentOffsetY,
+      const lastSmoothed = smoothedPointersRef.current.get(e.pointerId)!;
+
+      const rawX = x - currentOffsetX;
+      const rawY = y - currentOffsetY;
+
+      // Exponential Moving Average for Stroke Stabilization
+      const smoothedX = lastSmoothed.x + (rawX - lastSmoothed.x) * SMOOTHING_FACTOR;
+      const smoothedY = lastSmoothed.y + (rawY - lastSmoothed.y) * SMOOTHING_FACTOR;
+
+      const smoothedPoint: Point = {
+        x: smoothedX,
+        y: smoothedY,
         pressure: e.pressure || 0.5,
-      });
+      };
+
+      pts.push(smoothedPoint);
+      smoothedPointersRef.current.set(e.pointerId, smoothedPoint);
       renderCanvas();
     }
   };
@@ -585,6 +647,7 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
     }
 
     activeTouchPointsRef.current.delete(e.pointerId);
+    smoothedPointersRef.current.delete(e.pointerId);
     const isPalmEraser = palmPointerIdsRef.current.has(e.pointerId);
     palmPointerIdsRef.current.delete(e.pointerId);
     if (activeTouchPointsRef.current.size < 2) {
@@ -605,9 +668,10 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
       return;
     }
 
-    // Finish selection dragging
-    if (isDraggingSelectionRef.current) {
+    // Finish selection dragging or resizing
+    if (isDraggingSelectionRef.current || isResizingSelectionRef.current) {
       isDraggingSelectionRef.current = false;
+      isResizingSelectionRef.current = false;
       const dx = dragSelectionOffsetRef.current.x;
       const dy = dragSelectionOffsetRef.current.y;
       if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
@@ -694,7 +758,26 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
         setSelectedShapeIds(selectedShapes.map((s) => s.id));
 
         if (selectedStrokes.length > 0 || selectedShapes.length > 0) {
-          setSelectionBounds({ minX, minY, maxX, maxY });
+          // Snap selection bounds to actual selected elements
+          let sMinX = Infinity, sMinY = Infinity, sMaxX = -Infinity, sMaxY = -Infinity;
+          
+          selectedStrokes.forEach(st => {
+            st.points.forEach(p => {
+              if (p.x < sMinX) sMinX = p.x;
+              if (p.y < sMinY) sMinY = p.y;
+              if (p.x > sMaxX) sMaxX = p.x;
+              if (p.y > sMaxY) sMaxY = p.y;
+            });
+          });
+
+          selectedShapes.forEach(sh => {
+            if (sh.x < sMinX) sMinX = sh.x;
+            if (sh.y < sMinY) sMinY = sh.y;
+            if (sh.x + sh.width > sMaxX) sMaxX = sh.x + sh.width;
+            if (sh.y + sh.height > sMaxY) sMaxY = sh.y + sh.height;
+          });
+
+          setSelectionBounds({ minX: sMinX, minY: sMinY, maxX: sMaxX, maxY: sMaxY });
         } else {
           setSelectionBounds(null);
         }
@@ -798,6 +881,7 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
         onAddStroke(stroke);
       }
       activePointersRef.current.delete(e.pointerId);
+      smoothedPointersRef.current.delete(e.pointerId);
       renderCanvas();
     }
   };
@@ -920,7 +1004,7 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
     const count = selectedStrokeIds.length + selectedShapeIds.length;
 
     onCircleToSearchAI({
-      prompt: `Recognize this handwritten mathematical equation or expression (${count} canvas elements) and provide a step-by-step pedagogical solution with the final answer.`,
+      prompt: `Identify the handwritten math in this image (${count} elements). Solve it concisely. If it's a simple calculation like 2+2, just give the result. For complex ones, show brief steps.`,
       imageBase64: cropDataUrl || undefined,
       isMathEquation: true,
       selectionBounds: { ...selectionBounds },
@@ -934,7 +1018,7 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
     const count = selectedStrokeIds.length + selectedShapeIds.length;
 
     onCircleToSearchAI({
-      prompt: `Explain this whiteboard drawing and diagram elements (${count} items) in detail for our lesson.`,
+      prompt: `Summarize these whiteboard elements (${count} items) briefly. Focus on key educational concepts only. Keep it short.`,
       imageBase64: cropDataUrl || undefined,
       isMathEquation: false,
       selectionBounds: { ...selectionBounds },
@@ -966,6 +1050,22 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
       />
+
+      {/* REAL-TIME SIZE PREVIEW OVERLAY (Samsung WAF Style) */}
+      {activeShapePreview && (
+        <div 
+          className="absolute pointer-events-none bg-slate-900/80 text-white px-2 py-1 rounded-md text-[10px] font-mono font-bold z-40 border border-white/20 shadow-lg backdrop-blur-sm"
+          style={{
+            left: `${activeShapePreview.currentX + 15}px`,
+            top: `${activeShapePreview.currentY + 15}px`,
+          }}
+        >
+          <div className="flex flex-col">
+            <span>W: {Math.abs(activeShapePreview.currentX - activeShapePreview.startX).toFixed(1)} px | {(Math.abs(activeShapePreview.currentX - activeShapePreview.startX) / 37.8).toFixed(2)} cm</span>
+            <span>H: {Math.abs(activeShapePreview.currentY - activeShapePreview.startY).toFixed(1)} px | {(Math.abs(activeShapePreview.currentY - activeShapePreview.startY) / 37.8).toFixed(2)} cm</span>
+          </div>
+        </div>
+      )}
 
       {/* LASSO SELECTION FLOATING ACTION BAR (Samsung WAF Circle-to-Search / Transform) */}
       {selectionBounds && (selectedStrokeIds.length > 0 || selectedShapeIds.length > 0) && (
@@ -1014,6 +1114,31 @@ const STICKY_COLORS: Record<string, { bg: string; border: string; header: string
             >
               <Copy className="w-3.5 h-3.5" />
             </button>
+          )}
+
+          {/* Font Size Refiner (for text shapes) */}
+          {selectedShapeIds.length === 1 && shapes.find(s => s.id === selectedShapeIds[0])?.type === 'text' && (
+            <div className="flex items-center space-x-1 px-2 border-l border-slate-700">
+              <span className="text-[9px] font-black uppercase text-slate-500 mr-1">Size</span>
+              {[12, 24, 36, 48, 72, 96, 112].map((sz) => (
+                <button
+                  key={`text-sz-${sz}`}
+                  type="button"
+                  onClick={() => {
+                    if (onUpdateShape) {
+                      onUpdateShape(selectedShapeIds[0], { fontSize: sz });
+                    }
+                  }}
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-black transition-all ${
+                    (shapes.find(s => s.id === selectedShapeIds[0])?.fontSize || 24) === sz
+                      ? 'bg-sky-500 text-white'
+                      : 'text-slate-400 hover:bg-slate-700 hover:text-white'
+                  }`}
+                >
+                  {sz}
+                </button>
+              ))}
+            </div>
           )}
 
           {/* Delete Selected */}
@@ -1604,6 +1729,113 @@ function drawSingleShape(
     ctx.moveTo(cx, y);
     ctx.lineTo(x + width, y + height - ry);
     ctx.stroke();
+  } else if (type === 'hexagon') {
+    const cx = x + width / 2;
+    const cy = y + height / 2;
+    const r = Math.min(width, height) / 2;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI / 3) * i;
+      const px = cx + r * Math.cos(angle);
+      const py = cy + r * Math.sin(angle);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.stroke();
+  } else if (type === 'pentagon') {
+    const cx = x + width / 2;
+    const cy = y + height / 2;
+    const r = Math.min(width, height) / 2;
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+      const angle = (Math.PI * 2 / 5) * i - Math.PI / 2;
+      const px = cx + r * Math.cos(angle);
+      const py = cy + r * Math.sin(angle);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.stroke();
+  } else if (type === 'diamond') {
+    ctx.beginPath();
+    ctx.moveTo(x + width / 2, y);
+    ctx.lineTo(x + width, y + height / 2);
+    ctx.lineTo(x + width / 2, y + height);
+    ctx.lineTo(x, y + height / 2);
+    ctx.closePath();
+    ctx.stroke();
+  } else if (type === 'heart') {
+    const cx = x + width / 2;
+    const cy = y + height / 2;
+    const w = width;
+    const h = height;
+    ctx.beginPath();
+    ctx.moveTo(cx, y + h * 0.25);
+    ctx.bezierCurveTo(cx, y, x, y, x, y + h * 0.4);
+    ctx.bezierCurveTo(x, y + h * 0.7, cx, y + h, cx, y + h);
+    ctx.bezierCurveTo(cx, y + h, x + w, y + h * 0.7, x + w, y + h * 0.4);
+    ctx.bezierCurveTo(x + w, y, cx, y, cx, y + h * 0.25);
+    ctx.stroke();
+  } else if (type === 'prism') {
+    const offset = width * 0.2;
+    const w = width - offset;
+    const h = height - offset;
+    // Front triangle
+    ctx.beginPath();
+    ctx.moveTo(x, y + height);
+    ctx.lineTo(x + w, y + height);
+    ctx.lineTo(x + w / 2, y + offset);
+    ctx.closePath();
+    ctx.stroke();
+    // Back edges
+    ctx.beginPath();
+    ctx.moveTo(x + w / 2, y + offset);
+    ctx.lineTo(x + w / 2 + offset, y);
+    ctx.lineTo(x + w + offset, y + h);
+    ctx.lineTo(x + w, y + height);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x + w + offset, y + h);
+    ctx.lineTo(x + w / 2 + offset, y);
+    ctx.stroke();
+  } else if (type === 'torus') {
+    const cx = x + width / 2;
+    const cy = y + height / 2;
+    const rx = width / 2;
+    const ry = height / 2;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx * 0.4, ry * 0.4, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (type === 'text' && shape.text) {
+    ctx.font = `${shape.fontSize || 24}px ${
+      shape.fontFamily === 'serif' ? 'serif' : shape.fontFamily === 'mono' ? 'monospace' : 'sans-serif'
+    }`;
+    ctx.fillStyle = shape.color;
+    ctx.textBaseline = 'top';
+
+    // Text wrapping helper
+    const words = shape.text.split(' ');
+    let line = '';
+    let testY = y;
+    const lineHeight = (shape.fontSize || 24) * 1.2;
+
+    for (let n = 0; n < words.length; n++) {
+      const testLine = line + words[n] + ' ';
+      const metrics = ctx.measureText(testLine);
+      const testWidth = metrics.width;
+      if (testWidth > width && n > 0) {
+        ctx.fillText(line, x, testY);
+        line = words[n] + ' ';
+        testY += lineHeight;
+      } else {
+        line = testLine;
+      }
+    }
+    ctx.fillText(line, x, testY);
   }
 
   ctx.restore();

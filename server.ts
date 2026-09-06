@@ -329,7 +329,7 @@ app.post("/api/convert-text", async (req, res) => {
                 },
               },
               {
-                text: "You are an expert handwriting transcriber. Transcribe the handwritten text from this whiteboard crop accurately. Respond with ONLY the transcribed text. Do not write 'Here is the transcription' or add any introductory/concluding remarks. If it is a mathematical formula, format it nicely. If you cannot recognize any text, return: '[No clear text recognized]'",
+                text: "You are an expert handwriting transcriber and editor. Transcribe the handwritten text from this whiteboard crop accurately. Refine the text into clear, readable language. If it is a list, use bullet points. If it is a heading followed by text, format it appropriately. If it is a mathematical formula, use standard mathematical notation. Respond with ONLY the refined text. Do not include any introductory remarks. If you cannot recognize any text, return: '[No clear text recognized]'",
               },
             ],
           });

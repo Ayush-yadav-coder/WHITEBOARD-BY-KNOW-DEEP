@@ -17,6 +17,8 @@ import {
   Columns2,
   X,
   Files,
+  Globe,
+  Key,
 } from 'lucide-react';
 import { SplitZoneCount } from '../types';
 
@@ -450,18 +452,18 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
               <span className="font-medium whitespace-nowrap">Upload</span>
             </button>
 
-            {/* 6. QR code */}
+            {/* 6. Share Link (Replacing QR code) */}
             <button
-              id="menu-item-qr-code"
+              id="menu-item-share-link"
               type="button"
               onClick={() => {
-                onOpenQRCode();
+                onOpenQRCode(); // Reusing the same trigger state name for now as a toggle
                 onCloseDrawer();
               }}
               className="w-full px-2.5 py-1.5 rounded-xl flex items-center space-x-2.5 text-white hover:bg-white/15 active:bg-white/25 transition-all text-left group"
             >
-              <ScanLine className="w-4 h-4 text-[#818cf8] stroke-[2] shrink-0 group-hover:scale-110 transition-transform" />
-              <span className="font-medium whitespace-nowrap">QR code</span>
+              <Globe className="w-4 h-4 text-[#818cf8] stroke-[2] shrink-0 group-hover:scale-110 transition-transform" />
+              <span className="font-medium whitespace-nowrap">Share Link</span>
             </button>
 
             {/* 7. Email */}
@@ -492,9 +494,9 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
               <span className="font-medium whitespace-nowrap">Page Preview</span>
             </button>
 
-            {/* 8. Settings */}
+            {/* 8. AI Integration (Replacing Settings) */}
             <button
-              id="menu-item-settings"
+              id="menu-item-ai-integration"
               type="button"
               onClick={() => {
                 onOpenSettings();
@@ -502,8 +504,8 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({
               }}
               className="w-full px-2.5 py-1.5 rounded-xl flex items-center space-x-2.5 text-white hover:bg-white/15 active:bg-white/25 transition-all text-left group"
             >
-              <Settings className="w-4 h-4 text-[#cbd5e1] stroke-[2] shrink-0 group-hover:scale-110 transition-transform" />
-              <span className="font-medium whitespace-nowrap">Settings</span>
+              <Key className="w-4 h-4 text-[#cbd5e1] stroke-[2] shrink-0 group-hover:scale-110 transition-transform" />
+              <span className="font-medium whitespace-nowrap">AI Integration</span>
             </button>
 
             {/* 9. Exit */}

@@ -66,9 +66,9 @@ export const BrowserWidget: React.FC<BrowserWidgetProps> = ({ isOpen, onClose })
     let target = urlInput.trim();
     if (!target) return;
     if (!target.startsWith('http://') && !target.startsWith('https://')) {
-      // If it looks like a query
-      if (!target.includes('.')) {
-        target = `https://en.wikipedia.org/w/index.php?search=${encodeURIComponent(target)}`;
+      // If it looks like a query (contains spaces or no dots)
+      if (!target.includes('.') || target.includes(' ')) {
+        target = `https://www.google.com/search?q=${encodeURIComponent(target)}&igu=1`;
       } else {
         target = `https://${target}`;
       }
@@ -283,21 +283,24 @@ export const BrowserWidget: React.FC<BrowserWidgetProps> = ({ isOpen, onClose })
               ))}
             </div>
 
-            {/* Quick Wikipedia Search */}
+            {/* Global AI & Web Search */}
             <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
-              <span className="text-xs font-semibold text-slate-200 block mb-2">
-                Quick Topic Research (Wikipedia)
-              </span>
+              <div className="flex items-center space-x-2 mb-3">
+                <Search className="w-4 h-4 text-sky-400" />
+                <span className="text-xs font-black uppercase tracking-widest text-slate-200">
+                  Global Chrome AI Search
+                </span>
+              </div>
               <div className="flex space-x-2">
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="e.g. Mitochondria, Periodic Table, Civil Rights Act..."
-                  className="flex-1 px-3 py-1.5 text-xs bg-slate-950 border border-slate-700 rounded-lg text-white"
+                  placeholder="Ask anything... (e.g. quantum physics simplified, history of Rome)..."
+                  className="flex-1 px-3 py-2 text-xs bg-slate-950 border border-slate-700 rounded-xl text-white focus:border-sky-500 focus:outline-none"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && searchQuery.trim()) {
-                      const u = `https://en.m.wikipedia.org/wiki/${encodeURIComponent(searchQuery.trim().replace(/\s+/g, '_'))}`;
+                      const u = `https://www.google.com/search?q=${encodeURIComponent(searchQuery.trim())}&igu=1`;
                       setUrlInput(u);
                       setCurrentUrl(u);
                       setBrowserMode('iframe');
@@ -308,13 +311,13 @@ export const BrowserWidget: React.FC<BrowserWidgetProps> = ({ isOpen, onClose })
                   type="button"
                   onClick={() => {
                     if (searchQuery.trim()) {
-                      const u = `https://en.m.wikipedia.org/wiki/${encodeURIComponent(searchQuery.trim().replace(/\s+/g, '_'))}`;
+                      const u = `https://www.google.com/search?q=${encodeURIComponent(searchQuery.trim())}&igu=1`;
                       setUrlInput(u);
                       setCurrentUrl(u);
                       setBrowserMode('iframe');
                     }
                   }}
-                  className="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-medium transition-colors"
+                  className="px-5 py-2 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white rounded-xl text-xs font-black transition-all shadow-md active:scale-95"
                 >
                   Search
                 </button>
